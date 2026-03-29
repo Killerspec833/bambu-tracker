@@ -1,0 +1,33 @@
+# Bambu Filament Tracker — Configuration
+# Copy this file to config.yaml and fill in your printer credentials.
+# To find your access token: Bambu Studio → Device → select printer → gear icon → Access Code
+# Serial number is printed on the printer label and visible in Bambu Studio.
+
+printers:
+  - name: "P1S-1"
+    model: P1S
+    serial: "YOUR_SERIAL_HERE"      # e.g. 01P00A123456789
+    access_token: "YOUR_TOKEN_HERE" # 8-character alphanumeric access code
+    region: us  # us | eu | ap
+
+  - name: "P1S-2"
+    model: P1S
+    serial: "YOUR_SERIAL_HERE"
+    access_token: "YOUR_TOKEN_HERE"
+    region: us
+
+  - name: "A1-1"
+    model: A1
+    serial: "YOUR_SERIAL_HERE"
+    access_token: "YOUR_TOKEN_HERE"
+    region: us
+
+alerts:
+  desktop: true           # use notify-send (requires libnotify-bin on Linux)
+  openclaw: true          # use: openclaw system event --text "..." --mode now
+  low_stock_grams: 50     # alert when spool < this many grams remaining
+  pre_print_check: true   # alert before print if stock insufficient
+
+web_ui:
+  port: 7070
+  host: "0.0.0.0"
