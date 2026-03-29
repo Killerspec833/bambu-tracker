@@ -130,37 +130,61 @@ class Inventory:
             ).fetchall()
         return [_row_to_spool(r) for r in rows]
 
-    def update_spool(self, spool_id: int, **fields: object) -> None:
+    def get_all_spools(self) -> list[FilamentSpool]:
+        return self.list_spools()
+
+    def get_spools_for_printer(self, printer_name: str) -> list[FilamentSpool]:
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT * FROM spools WHERE printer_name = ? ORDER BY ams_slot",
+                (printer_name,),
+            ).fetchall()
+        return [_row_to_spool(r) for r in rows]
+
+    def update_spool(self, spool_id: int, **fields: object) -> bool:
         allowed = {
             "name", "material", "color", "brand", "total_weight_g",
             "remaining_g", "printer_name", "ams_slot", "low_stock_threshold_g",
         }
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
-            return
+            return False
         updates["updated_at"] = _now_iso()
         set_clause = ", ".join(f"{k} = ?" for k in updates)
         values = list(updates.values()) + [spool_id]
+        rowcount = 0
         with self._conn() as conn:
-            conn.execute(
+            rowcount = conn.execute(
                 f"UPDATE spools SET {set_clause} WHERE id = ?", values
-            )
+            ).rowcount
+        return rowcount > 0
 
-    def delete_spool(self, spool_id: int) -> None:
+    def delete_spool(self, spool_id: int) -> bool:
         with self._conn() as conn:
-            conn.execute("DELETE FROM spools WHERE id = ?", (spool_id,))
+            rowcount = conn.execute(
+                "DELETE FROM spools WHERE id = ?", (spool_id,)
+            ).rowcount
+        return rowcount > 0
 
     def deduct_usage(
-        self, spool_id: int, grams: float, note: str = ""
-    ) -> float:
-        """Deduct grams from spool, clamp to 0, record event. Returns new remaining_g."""
+        self,
+        printer_name: str,
+        slot_index: int,
+        grams: float,
+        note: str = "",
+    ) -> Optional[FilamentSpool]:
+        """Look up spool by printer+slot, deduct grams, record event. Returns updated spool or None."""
         with self._conn() as conn:
             row = conn.execute(
-                "SELECT remaining_g FROM spools WHERE id = ?", (spool_id,)
+                "SELECT * FROM spools WHERE printer_name = ? AND ams_slot = ?",
+                (printer_name, slot_index),
             ).fetchone()
             if not row:
-                raise ValueError(f"Spool {spool_id} not found.")
-            new_remaining = max(0.0, row["remaining_g"] - grams)
+                return None
+            spool_id = row["id"]
+            old_remaining = row["remaining_g"]
+            new_remaining = max(0.0, old_remaining - grams)
+            actual_deducted = old_remaining - new_remaining
             now = _now_iso()
             conn.execute(
                 "UPDATE spools SET remaining_g = ?, updated_at = ? WHERE id = ?",
@@ -170,9 +194,28 @@ class Inventory:
                 """INSERT INTO stock_events
                    (spool_id, event_type, delta_g, new_remaining_g, timestamp, note)
                    VALUES (?,?,?,?,?,?)""",
-                (spool_id, "deduct", -grams, new_remaining, now, note),
+                (spool_id, "deduct", -actual_deducted, new_remaining, now, note),
             )
-        return new_remaining
+            updated = conn.execute(
+                "SELECT * FROM spools WHERE id = ?", (spool_id,)
+            ).fetchone()
+        return _row_to_spool(updated) if updated else None
+
+    def get_low_stock_spools(
+        self, threshold_override: Optional[float] = None
+    ) -> list[FilamentSpool]:
+        if threshold_override is not None:
+            with self._conn() as conn:
+                rows = conn.execute(
+                    "SELECT * FROM spools WHERE remaining_g <= ?",
+                    (threshold_override,),
+                ).fetchall()
+        else:
+            with self._conn() as conn:
+                rows = conn.execute(
+                    "SELECT * FROM spools WHERE remaining_g <= low_stock_threshold_g"
+                ).fetchall()
+        return [_row_to_spool(r) for r in rows]
 
     def manual_adjust(
         self, spool_id: int, new_remaining_g: float, note: str = ""
@@ -198,6 +241,48 @@ class Inventory:
             )
 
     # -------------------------------------------------------------- print jobs
+
+    def log_print_job(
+        self,
+        printer_name: str,
+        subtask_name: str,
+        start_time: Optional[str],
+        end_time: Optional[str],
+        status: str,
+        filament_used: dict,
+    ) -> int:
+        """Record a completed print job. Updates the active in-progress record if one exists,
+        otherwise inserts a new complete record. Returns the job id."""
+        now = _now_iso()
+        end = end_time or now
+        with self._conn() as conn:
+            row = conn.execute(
+                """SELECT id FROM print_jobs
+                   WHERE printer_name = ? AND status = 'RUNNING'
+                   ORDER BY start_time DESC LIMIT 1""",
+                (printer_name,),
+            ).fetchone()
+            if row:
+                conn.execute(
+                    """UPDATE print_jobs
+                       SET end_time=?, status=?, filament_used_json=?
+                       WHERE id=?""",
+                    (end, status, json.dumps(filament_used), row["id"]),
+                )
+                return row["id"]  # type: ignore[return-value]
+            start = start_time or now
+            cur = conn.execute(
+                """INSERT INTO print_jobs
+                   (printer_name, subtask_name, start_time, end_time, status, filament_used_json)
+                   VALUES (?,?,?,?,?,?)""",
+                (printer_name, subtask_name, start, end, status, json.dumps(filament_used)),
+            )
+            return cur.lastrowid  # type: ignore[return-value]
+
+    def get_print_history(
+        self, printer_name: Optional[str] = None, limit: int = 50
+    ) -> list[PrintJob]:
+        return self.list_jobs(printer_name=printer_name, limit=limit)
 
     def start_job(self, printer_name: str, subtask_name: str) -> int:
         now = _now_iso()

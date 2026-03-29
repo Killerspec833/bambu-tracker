@@ -90,17 +90,17 @@ def main() -> None:
         )
         printers[name] = printer
 
-        def make_callbacks(p: Printer) -> tuple[Any, Any, Any]:
+        def make_callbacks(p: Printer) -> tuple[Any, Any]:
             def on_job_start(pr: Printer) -> None:
                 logger.info("[%s] Job started: %s", pr.name, pr.current_job)
+                job_name = pr.current_job or "unknown"
+                inv.start_job(pr.name, job_name)
                 if not alerts_cfg.get("pre_print_check", True):
                     return
-                job_name = pr.current_job or "unknown"
                 for slot in pr.ams_slots:
                     spool = inv.get_spool_by_printer_slot(pr.name, slot.index)
                     if spool is None:
                         continue
-                    # Rough estimate: flag if below threshold
                     if spool.remaining_g <= spool.low_stock_threshold_g:
                         alert_manager.pre_print_insufficient(
                             printer=pr.name,
@@ -110,56 +110,63 @@ def main() -> None:
                             remaining_g=spool.remaining_g,
                             slot=slot.index,
                         )
-                inv.start_job(pr.name, job_name)
 
-            def on_job_finish(pr: Printer, filament_used: dict[int, float]) -> None:
-                # Capture job name before finish_job may clear pr.current_job
+            def on_job_finish(pr: Printer) -> None:
                 job_name = pr.current_job or "unknown"
-                logger.info(
-                    "[%s] Job finished: %s  used=%s",
-                    pr.name, job_name, filament_used,
-                )
-                job_id = inv.get_active_job_id(pr.name)
-                if job_id:
-                    inv.finish_job(job_id, pr.state, filament_used)
+                logger.info("[%s] Job finished: %s", pr.name, job_name)
 
-                for slot_idx, grams in filament_used.items():
-                    spool = inv.get_spool_by_printer_slot(pr.name, slot_idx)
+                # Estimate filament used per slot from AMS remaining_pct vs inventory
+                filament_used: dict[int, float] = {}
+                for slot in pr.ams_slots:
+                    spool = inv.get_spool_by_printer_slot(pr.name, slot.index)
                     if spool is None:
                         continue
-                    new_remaining = inv.deduct_usage(
-                        spool.id, grams,
+                    ams_remaining_g = spool.total_weight_g * slot.remaining_pct / 100.0
+                    grams_used = max(0.0, spool.remaining_g - ams_remaining_g)
+                    if grams_used > 0:
+                        filament_used[slot.index] = grams_used
+
+                inv.log_print_job(
+                    printer_name=pr.name,
+                    subtask_name=job_name,
+                    start_time=None,
+                    end_time=None,
+                    status=pr.state,
+                    filament_used=filament_used,
+                )
+
+                for slot_idx, grams in filament_used.items():
+                    updated_spool = inv.deduct_usage(
+                        pr.name, slot_idx, grams,
                         note=f"Print job: {job_name}",
                     )
-                    if new_remaining is None:
+                    if updated_spool is None:
                         continue
                     alert_manager.print_complete(
                         printer=pr.name,
                         job=job_name,
                         used_g=grams,
-                        spool_name=spool.name,
-                        remaining_g=new_remaining,
+                        spool_name=updated_spool.name,
+                        remaining_g=updated_spool.remaining_g,
                     )
-                    if new_remaining <= 0:
-                        alert_manager.spool_empty(spool.name, pr.name, slot_idx)
-                    elif new_remaining <= spool.low_stock_threshold_g:
-                        alert_manager.low_stock(spool.name, pr.name, slot_idx, new_remaining)
+                    if updated_spool.remaining_g <= 0:
+                        alert_manager.spool_empty(updated_spool.name, pr.name, slot_idx)
+                    elif updated_spool.remaining_g <= updated_spool.low_stock_threshold_g:
+                        alert_manager.low_stock(
+                            updated_spool.name, pr.name, slot_idx, updated_spool.remaining_g
+                        )
 
-            def on_state_update(pr: Printer) -> None:
-                pass  # state already updated on the shared Printer object
+            return on_job_start, on_job_finish
 
-            return on_job_start, on_job_finish, on_state_update
-
-        on_start, on_finish, on_update = make_callbacks(printer)
+        on_start, on_finish = make_callbacks(printer)
 
         client = BambuMQTTClient(
             printer_cfg=pcfg,
             printer_state=printer,
-            on_job_start=on_start,
-            on_job_finish=on_finish,
-            on_state_update=on_update,
             cloud_username=cloud_username,
             cloud_token_file=cloud_token_file,
+            on_job_start=on_start,
+            on_job_finish=on_finish,
         )
         mqtt_clients.append(client)
 

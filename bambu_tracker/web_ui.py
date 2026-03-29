@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import re
+from html import escape as h
 from typing import Any
 
 from flask import Flask, redirect, render_template_string, request, url_for
@@ -89,6 +91,14 @@ _LAYOUT = """<!DOCTYPE html>
 </html>"""
 
 
+_HEX_RE = re.compile(r'^#[0-9A-Fa-f]{3,8}$')
+
+
+def _safe_color(color: str) -> str:
+    """Return color if it's a valid CSS hex value, else a safe fallback."""
+    return color if _HEX_RE.match(color) else "#aaaaaa"
+
+
 def _page(title: str, body: str) -> str:
     return _LAYOUT.format(title=title, css=_BASE_CSS, body=body)
 
@@ -109,16 +119,16 @@ def create_app(
     def dashboard() -> str:
         cards_html = ""
         for pname, printer in printers.items():
-            state_cls = f"state-{printer.state}"
+            state_cls = f"state-{h(printer.state)}"
             slots_html = ""
             for slot in printer.ams_slots:
-                color = slot.color if slot.color.startswith("#") else "#aaa"
+                color = _safe_color(slot.color)
                 pct = max(0, min(100, slot.remaining_pct))
                 slots_html += f"""
                 <div class="slot-row">
                   <span style="min-width:28px;font-size:.8rem;color:#888">S{slot.index}</span>
                   <span class="color-dot" style="background:{color}"></span>
-                  <span style="min-width:50px;font-size:.82rem">{slot.material or "—"}</span>
+                  <span style="min-width:50px;font-size:.82rem">{h(slot.material) if slot.material else "—"}</span>
                   <div class="pct-bar">
                     <div class="pct-fill" style="width:{pct}%;background:{color}"></div>
                   </div>
@@ -127,17 +137,17 @@ def create_app(
             if not slots_html:
                 slots_html = '<p style="color:#999;font-size:.85rem">No AMS data yet.</p>'
             job_html = (
-                f'<p style="font-size:.85rem;margin-top:8px">Job: <b>{printer.current_job}</b></p>'
+                f'<p style="font-size:.85rem;margin-top:8px">Job: <b>{h(printer.current_job)}</b></p>'
                 if printer.current_job
                 else '<p style="font-size:.85rem;margin-top:8px;color:#999">No active job.</p>'
             )
             cards_html += f"""
             <div class="card">
               <div style="display:flex;justify-content:space-between;align-items:center">
-                <strong>{pname}</strong>
-                <span class="badge {state_cls}">{printer.state}</span>
+                <strong>{h(pname)}</strong>
+                <span class="badge {state_cls}">{h(printer.state)}</span>
               </div>
-              <div style="font-size:.8rem;color:#888;margin-bottom:8px">{printer.model} · {printer.serial}</div>
+              <div style="font-size:.8rem;color:#888;margin-bottom:8px">{h(printer.model)} · {h(printer.serial)}</div>
               {slots_html}
               {job_html}
             </div>"""
@@ -155,25 +165,27 @@ def create_app(
         msg_html = ""
         if msg:
             css_cls = "msg-ok" if msg_type == "ok" else "msg-err"
-            msg_html = f'<div class="{css_cls}">{msg}</div>'
+            msg_html = f'<div class="{css_cls}">{h(msg)}</div>'
 
         rows = ""
         for s in spools:
-            pct = int(s.remaining_g / s.total_weight_g * 100) if s.total_weight_g else 0
-            color = s.color if s.color.startswith("#") else "#aaa"
+            pct = max(0, min(100, int(s.remaining_g / s.total_weight_g * 100))) if s.total_weight_g else 0
+            color = _safe_color(s.color)
             low = "⚠️ " if s.remaining_g <= s.low_stock_threshold_g else ""
             rows += f"""<tr>
               <td>{s.id}</td>
-              <td><span class="color-dot" style="background:{color}"></span>{s.name}</td>
-              <td>{s.material}</td>
-              <td>{s.brand}</td>
-              <td>{s.printer_name} / {s.ams_slot}</td>
+              <td><span class="color-dot" style="background:{color}"></span>{h(s.name)}</td>
+              <td>{h(s.material)}</td>
+              <td>{h(s.brand)}</td>
+              <td>{h(s.printer_name)} / {s.ams_slot}</td>
               <td>{low}{s.remaining_g:.0f}g / {s.total_weight_g:.0f}g ({pct}%)</td>
               <td>
                 <a href="/inventory/edit/{s.id}" class="btn" style="padding:3px 10px;font-size:.8rem">Edit</a>
-                <a href="/inventory/delete/{s.id}" class="btn btn-danger"
-                   style="padding:3px 10px;font-size:.8rem"
-                   onclick="return confirm('Delete spool?')">Del</a>
+                <form method="post" action="/inventory/delete/{s.id}" style="display:inline"
+                      onsubmit="return confirm('Delete spool?')">
+                  <button type="submit" class="btn btn-danger"
+                          style="padding:3px 10px;font-size:.8rem">Del</button>
+                </form>
               </td>
             </tr>"""
 
@@ -185,7 +197,16 @@ def create_app(
           <tbody>{rows or '<tr><td colspan="7" style="color:#999">No spools found.</td></tr>'}</tbody>
         </table>"""
 
-        add_form = """
+        body = (
+            f'{msg_html}<h2>Filament Inventory</h2>'
+            f'<a href="/inventory/add" class="btn" style="margin-bottom:12px;display:inline-block">+ Add Spool</a>'
+            f'{table}'
+        )
+        return _page("Inventory", body)
+
+    @app.route("/inventory/add", methods=["GET"])
+    def inventory_add_form() -> str:
+        form = """
         <h2>Add Spool</h2>
         <form method="post" action="/inventory/add">
           <label>Name <input name="name" required></label>
@@ -204,10 +225,9 @@ def create_app(
           <label>AMS slot (0-3) <input name="ams_slot" type="number" min="0" max="3" value="0"></label>
           <label>Low stock threshold (g) <input name="low_stock_threshold_g" type="number" step="1" value="50"></label>
           <button type="submit">Add Spool</button>
+          <a href="/inventory" class="btn" style="background:#888;margin-left:8px">Cancel</a>
         </form>"""
-
-        body = f"{msg_html}<h2>Filament Inventory</h2>{table}{add_form}"
-        return _page("Inventory", body)
+        return _page("Add Spool", form)
 
     @app.route("/inventory/add", methods=["POST"])
     def inventory_add() -> Any:
@@ -256,13 +276,13 @@ def create_app(
         form = f"""
         <h2>Edit Spool #{spool.id}</h2>
         <form method="post">
-          <label>Name <input name="name" value="{spool.name}" required></label>
-          <label>Material <input name="material" value="{spool.material}"></label>
-          <label>Color (hex) <input name="color" value="{spool.color}"></label>
-          <label>Brand <input name="brand" value="{spool.brand}"></label>
+          <label>Name <input name="name" value="{h(spool.name)}" required></label>
+          <label>Material <input name="material" value="{h(spool.material)}"></label>
+          <label>Color (hex) <input name="color" value="{h(spool.color)}"></label>
+          <label>Brand <input name="brand" value="{h(spool.brand)}"></label>
           <label>Total weight (g) <input name="total_weight_g" type="number" step="1" value="{spool.total_weight_g:.0f}"></label>
           <label>Remaining (g) <input name="remaining_g" type="number" step="1" value="{spool.remaining_g:.0f}"></label>
-          <label>Printer name <input name="printer_name" value="{spool.printer_name}"></label>
+          <label>Printer name <input name="printer_name" value="{h(spool.printer_name)}"></label>
           <label>AMS slot (0-3) <input name="ams_slot" type="number" min="0" max="3" value="{spool.ams_slot}"></label>
           <label>Low stock threshold (g) <input name="low_stock_threshold_g" type="number" step="1" value="{spool.low_stock_threshold_g:.0f}"></label>
           <button type="submit">Save</button>
@@ -270,7 +290,7 @@ def create_app(
         </form>"""
         return _page("Edit Spool", form)
 
-    @app.route("/inventory/delete/<int:spool_id>")
+    @app.route("/inventory/delete/<int:spool_id>", methods=["POST"])
     def inventory_delete(spool_id: int) -> Any:
         inventory.delete_spool(spool_id)
         return redirect(url_for("inventory_list", msg="Spool deleted.", msg_type="ok"))
@@ -301,17 +321,17 @@ def create_app(
             used_str = ", ".join(
                 f"S{k}:{v:.0f}g" for k, v in sorted(j.filament_used.items())
             ) or "—"
-            state_cls = f"state-{j.status}"
+            state_cls = f"state-{h(j.status)}"
             end = j.end_time[:19].replace("T", " ") if j.end_time else "—"
             start = j.start_time[:19].replace("T", " ") if j.start_time else "—"
             rows += f"""<tr>
               <td>{j.id}</td>
-              <td>{j.printer_name}</td>
-              <td>{j.subtask_name or "—"}</td>
-              <td>{start}</td>
-              <td>{end}</td>
-              <td><span class="badge {state_cls}">{j.status}</span></td>
-              <td>{used_str}</td>
+              <td>{h(j.printer_name)}</td>
+              <td>{h(j.subtask_name) if j.subtask_name else "—"}</td>
+              <td>{h(start)}</td>
+              <td>{h(end)}</td>
+              <td><span class="badge {state_cls}">{h(j.status)}</span></td>
+              <td>{h(used_str)}</td>
             </tr>"""
 
         table = f"""<table>
@@ -335,12 +355,13 @@ def create_app(
 
         if request.method == "POST":
             try:
-                config["alerts"]["low_stock_grams"] = float(
+                alerts = config.setdefault("alerts", {})
+                alerts["low_stock_grams"] = float(
                     request.form.get("low_stock_grams", 50)
                 )
-                config["alerts"]["desktop"] = "desktop" in request.form
-                config["alerts"]["openclaw"] = "openclaw" in request.form
-                config["alerts"]["pre_print_check"] = "pre_print_check" in request.form
+                alerts["desktop"] = "desktop" in request.form
+                alerts["openclaw"] = "openclaw" in request.form
+                alerts["pre_print_check"] = "pre_print_check" in request.form
                 msg = "Settings updated (runtime only — edit config.yaml to persist)."
             except ValueError as exc:
                 msg = f"Error: {exc}"
@@ -351,7 +372,7 @@ def create_app(
 
         msg_html = ""
         if msg:
-            msg_html = f'<div class="{"msg-ok" if msg_type == "ok" else "msg-err"}">{msg}</div>'
+            msg_html = f'<div class="{"msg-ok" if msg_type == "ok" else "msg-err"}">{h(msg)}</div>'
 
         form = f"""
         {msg_html}
@@ -379,9 +400,9 @@ def create_app(
         <table>
           <thead><tr><th>Name</th><th>Model</th><th>Serial</th><th>State</th></tr></thead>
           <tbody>{"".join(
-            f'<tr><td>{p.name}</td><td>{p.model}</td>'
-            f'<td><code>{p.serial}</code></td>'
-            f'<td><span class="badge state-{p.state}">{p.state}</span></td></tr>'
+            f'<tr><td>{h(p.name)}</td><td>{h(p.model)}</td>'
+            f'<td><code>{h(p.serial)}</code></td>'
+            f'<td><span class="badge state-{h(p.state)}">{h(p.state)}</span></td></tr>'
             for p in printers.values()
           )}</tbody>
         </table>"""
