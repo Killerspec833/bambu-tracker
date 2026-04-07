@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block extra_head %}
+<script src="{{ chartjs_url }}"></script>
+{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+  <h2>Stock History: {{ s.name }}</h2>
+  <a href="/inventory/{{ spool_id }}" class="btn btn-secondary btn-sm">Back</a>
+</div>
+<div class="card">
+  <canvas id="chart-stock" style="max-height:400px"></canvas>
+</div>
+<script>
+new Chart(document.getElementById('chart-stock'), {
+  type: 'line',
+  data: {
+    labels: {{ timestamps|safe }},
+    datasets: [{
+      label: 'Remaining (g)',
+      data: {{ values|safe }},
+      borderColor: '#4f46e5',
+      backgroundColor: 'rgba(79,70,229,.1)',
+      fill: true,
+      tension: 0.3,
+      pointRadius: 3,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: { y: { beginAtZero: true } },
+    plugins: { legend: { display: false } }
+  }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,26 @@
+# Bambu Tracker — Docker development config
+# MQTT connections will fail gracefully (bad credentials) — that's OK.
+# The web UI, inventory, and all other features work without live printers.
+# Replace the serial/access_token values with real ones to enable MQTT.
+
+printers:
+  - name: "P1S-dev"
+    model: P1S
+    serial: "00M00A000000000"   # fake serial — MQTT will fail, app continues
+    access_token: "00000000"
+    region: us
+
+alerts:
+  desktop: false
+  openclaw: false
+  low_stock_grams: 50
+  pre_print_check: false
+
+web_ui:
+  port: 7070
+  host: "0.0.0.0"
+  # secret_key is overridden by BAMBU_SECRET_KEY env var in compose
+
+cloud_auth:
+  username: ""
+  token_file: ""

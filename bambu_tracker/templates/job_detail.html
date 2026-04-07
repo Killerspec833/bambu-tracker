@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+  <h2>Job #{{ job_id }}: {{ j.subtask_name or 'unnamed' }}</h2>
+  <a href="/printers/{{ j.printer_id or 0 }}" class="btn btn-secondary btn-sm">Printer</a>
+</div>
+<div class="grid2" style="margin-bottom:20px">
+  <div class="stat-card"><div class="stat-val" style="font-size:1.1rem">{{ j.printer_name or '' }}</div><div class="stat-label">Printer</div></div>
+  <div class="stat-card"><div class="stat-val" style="font-size:1.1rem">{{ start }}</div><div class="stat-label">Start</div></div>
+  <div class="stat-card"><div class="stat-val" style="font-size:1.1rem">{{ end }}</div><div class="stat-label">End</div></div>
+  <div class="stat-card"><div class="stat-val" style="font-size:1.1rem">{{ dur_str }}</div><div class="stat-label">Duration</div></div>
+  <div class="stat-card"><div class="stat-val"><span class="badge badge-{{ (j.status or '')|lower }}">{{ j.status or '' }}</span></div><div class="stat-label">Status</div></div>
+  <div class="stat-card"><div class="stat-val">{{ '%.1f'|format(total_used) }}g</div><div class="stat-label">Total Filament Used</div></div>
+</div>
+<h3>Filament Breakdown</h3>
+<table style="max-width:500px;margin-top:8px">
+  <thead><tr><th>Slot</th><th>Spool</th><th>Used</th></tr></thead>
+  <tbody>
+  {% for row in filament_rows %}
+    <tr>
+      <td>S{{ row.slot_idx }}</td>
+      <td>{{ row.spool_link|safe }}</td>
+      <td>{{ '%.1f'|format(row.grams|float) }}g</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="3" class="empty-msg">No filament data.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% if j.notes %}
+  <div class="card" style="margin-top:16px">
+    <h3>Notes</h3>
+    <p style="font-size:.9rem">{{ j.notes }}</p>
+  </div>
+{% endif %}
+{% endblock %}

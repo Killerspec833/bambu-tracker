@@ -1,7 +1,21 @@
 # Bambu Filament Tracker — Configuration
-# Copy this file to config.yaml and fill in your printer credentials.
-# To find your access token: Bambu Studio → Device → select printer → gear icon → Access Code
-# Serial number is printed on the printer label and visible in Bambu Studio.
+# Copy this file to config.yaml and fill in your credentials.
+#
+# Printer credentials:
+#   serial      — printed on the label, visible in Bambu Studio
+#   access_token — Bambu Studio → Device → select printer → gear icon → Access Code
+#
+# Database:
+#   Requires PostgreSQL. Recommended: Supabase (free tier), Render Postgres, or self-hosted.
+#   Set BAMBU_DB_URL env var to override the url here.
+#
+# After editing, run:
+#   alembic upgrade head           ← create/migrate DB tables
+#   python run.py --create-admin   ← create the first admin user
+
+database:
+  url: "postgresql://user:password@localhost:5432/bambu_tracker"
+  # or: "postgresql://user:password@db.supabase.co:5432/postgres"
 
 printers:
   - name: "P1S-1"
@@ -31,3 +45,12 @@ alerts:
 web_ui:
   port: 7070
   host: "0.0.0.0"
+  secret_key: "change-me-to-a-random-secret-min-32-chars"
+
+cloud_auth:
+  username: "your@email.com"        # Bambu Lab account email
+  token_file: "~/.bambu_token"      # file containing your Bambu Cloud token
+
+# Environment variable overrides (useful for containers / CI):
+#   BAMBU_DB_URL      — overrides database.url
+#   BAMBU_SECRET_KEY  — overrides web_ui.secret_key

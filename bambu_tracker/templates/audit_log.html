@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+  <h2>Audit Log</h2>
+  <a href="/admin" class="btn btn-secondary btn-sm">Back</a>
+</div>
+<form class="filter-bar" method="get">
+  <label>Action filter <input type="text" name="action" value="{{ q_action }}" placeholder="e.g. spool"></label>
+  <button class="btn btn-secondary btn-sm" type="submit">Filter</button>
+</form>
+<table>
+  <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Entity</th><th>ID</th><th>IP</th></tr></thead>
+  <tbody>
+  {% for e in entries %}
+    <tr>
+      <td>{{ e.timestamp|fmt_dt }}</td>
+      <td>{{ e.username or 'system' }}</td>
+      <td><code>{{ e.action }}</code></td>
+      <td>{{ e.entity_type or '' }}</td>
+      <td>{{ e.entity_id or '' }}</td>
+      <td>{{ e.ip_address or '' }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="6" class="empty-msg">No entries.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

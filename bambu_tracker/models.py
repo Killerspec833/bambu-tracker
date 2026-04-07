@@ -32,6 +32,7 @@ class FilamentSpool:
     printer_name: str
     ams_slot: int
     low_stock_threshold_g: float
+    barcode_id: str = ""
 
 
 @dataclass

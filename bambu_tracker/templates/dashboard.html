@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block content %}
+{% for a in active_alerts[:5] %}
+  <div class="msg-warn" style="display:flex;justify-content:space-between;align-items:center">
+    <span><strong>{{ a.alert_type }}</strong> — {{ a.message }} <small style="color:#92400e">{{ a.triggered_at|fmt_dt }}</small></span>
+    <form method="post" action="/alerts/{{ a.id }}/ack" style="margin:0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-xs btn-secondary" type="submit">Dismiss</button>
+    </form>
+  </div>
+{% endfor %}
+
+<div class="grid2" style="margin-bottom:20px">
+  <div class="stat-card"><div class="stat-val">{{ total_spools }}</div><div class="stat-label">Total Spools</div></div>
+  <div class="stat-card"><div class="stat-val" style="color:#ef4444">{{ low_spools|length }}</div><div class="stat-label">Low Stock</div></div>
+  <div class="stat-card"><div class="stat-val">{{ printers_list|length }}</div><div class="stat-label">Printers</div></div>
+  <div class="stat-card"><div class="stat-val">{{ active_alerts|length }}</div><div class="stat-label">Active Alerts</div></div>
+</div>
+
+<h2>Printers</h2>
+<div class="grid" style="margin-bottom:24px">
+{% for p in printers_list %}
+  {% set state = p.state or 'IDLE' %}
+  {% set state_cls = 'badge-' ~ state|lower %}
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <a href="/printers/{{ p.id }}" style="font-weight:600;color:#1e1b4b">{{ p.name }}</a>
+      <span class="badge {{ state_cls }}">{{ state }}</span>
+    </div>
+    <div style="font-size:.78rem;color:#9ca3af;margin-bottom:10px">{{ p.model }} · {{ p.serial }} · last seen {{ p.seen_str }}</div>
+    {% if p.ams_slots_html %}
+      {{ p.ams_slots_html|safe }}
+    {% else %}
+      <p style="font-size:.82rem;color:#9ca3af">No AMS data yet</p>
+    {% endif %}
+    {% if p.current_job %}
+      <p style="font-size:.82rem;margin-top:8px">Job: <strong>{{ p.current_job }}</strong></p>
+    {% else %}
+      <p style="font-size:.82rem;color:#9ca3af;margin-top:8px">No active job</p>
+    {% endif %}
+  </div>
+{% else %}
+  <p class="empty-msg">No printers configured. Add printers in config.yaml.</p>
+{% endfor %}
+</div>
+
+<div style="display:flex;justify-content:space-between;align-items:center">
+  <h2>Low Stock</h2>
+  <a href="/inventory?low_stock=1" class="btn btn-secondary btn-sm">View All Low Stock</a>
+</div>
+<table>
+  <thead><tr><th>Spool</th><th>Material</th><th>Location</th><th>Remaining</th></tr></thead>
+  <tbody>
+  {% for s in low_spools[:10] %}
+    {% set pct = (s.remaining_g / s.total_weight_g * 100)|int if s.total_weight_g else 0 %}
+    <tr>
+      <td><a href="/inventory/{{ s.id }}">{{ s.name }}</a></td>
+      <td><span class="dot" style="background:{{ s.color|safe }}"></span>{{ s.material }}</td>
+      <td>{{ s.printer_name or 'storage' }}</td>
+      <td class="warn-tag">{{ s.remaining_g|int }}g ({{ pct }}%)</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="4" class="empty-msg">All spools are well-stocked.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

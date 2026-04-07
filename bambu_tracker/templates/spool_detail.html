@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+  <h2>{{ s.name }}</h2>
+  <div style="display:flex;gap:8px">
+    <a href="/labels/{{ spool_id }}" class="btn btn-secondary btn-sm">Print Label</a>
+    <a href="/inventory/{{ spool_id }}/edit" class="btn btn-primary btn-sm">Edit</a>
+  </div>
+</div>
+<div class="grid">
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+      <div style="width:48px;height:48px;border-radius:50%;background:{{ color }};border:2px solid #e5e7eb"></div>
+      <div>
+        <div style="font-weight:600">{{ s.material }} · {{ s.brand or 'Unknown brand' }}</div>
+        <code style="font-size:.8rem;color:#6b7280">{{ s.barcode_id or '' }}</code>
+      </div>
+    </div>
+    <div class="pct-bar" style="height:12px;margin-bottom:8px">
+      <div class="pct-fill {{ pct_cls }}" style="width:{{ pct }}%"></div>
+    </div>
+    <p style="font-size:.85rem">{{ rem|int }}g remaining of {{ total_w|int }}g ({{ pct }}%)</p>
+    <p style="font-size:.85rem;color:#6b7280;margin-top:6px">Location: {{ loc_str|safe }}</p>
+    {% if s.purchase_date %}
+      <p style="font-size:.85rem;color:#6b7280;margin-top:6px">
+        Purchased: {{ s.purchase_date }}{% if s.purchase_price_cents %} · ${{ '%.2f'|format(s.purchase_price_cents / 100) }}{% endif %}
+      </p>
+    {% endif %}
+    {% if s.notes %}
+      <p style="font-size:.85rem;color:#6b7280;margin-top:6px">Notes: {{ s.notes }}</p>
+    {% endif %}
+  </div>
+  <div class="card">
+    <h3>Quick Adjust</h3>
+    <form method="post" action="/inventory/{{ spool_id }}/adjust">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>New remaining (g)
+        <input type="number" name="remaining_g" value="{{ rem|int }}" step="1" min="0" max="{{ total_w|int }}">
+      </label>
+      <label>Note <input type="text" name="note" placeholder="Reason for adjustment"></label>
+      <button class="btn btn-primary btn-sm" style="margin-top:12px" type="submit">Save</button>
+    </form>
+  </div>
+</div>
+<h3>Stock History (last 30 events)</h3>
+<table style="margin-top:8px">
+  <thead><tr><th>Time</th><th>Event</th><th>Delta</th><th>Remaining</th><th>Note</th></tr></thead>
+  <tbody>
+  {% for e in history %}
+    {% set delta = e.delta_g|float %}
+    <tr>
+      <td>{{ e.timestamp|fmt_dt }}</td>
+      <td><code>{{ e.event_type }}</code></td>
+      <td style="color:{{ '#15803d' if delta >= 0 else '#b91c1c' }}">{{ '+' if delta >= 0 else '' }}{{ delta|int }}g</td>
+      <td>{{ e.new_remaining_g|float|int }}g</td>
+      <td>{{ e.note or '' }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5" class="empty-msg">No history.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

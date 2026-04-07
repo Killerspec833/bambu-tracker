@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block extra_head %}
+<style>
+@media print {
+  header, nav, .no-print { display: none !important; }
+  body { background: white; }
+  main { padding: 0; max-width: none; }
+  .label-print-area { border: none; box-shadow: none; padding: 4px; }
+  .label-print-area h2, .label-print-area p { display: none; }
+}
+</style>
+{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+  <h2>Label: {{ s.name }}</h2>
+  <div class="no-print" style="display:flex;gap:8px">
+    <button onclick="window.print()" class="btn btn-primary btn-sm">Print</button>
+    <a href="/labels/{{ spool_id }}/code128.png" class="btn btn-secondary btn-sm">Download Code128</a>
+    <a href="/labels/{{ spool_id }}/qr.png" class="btn btn-secondary btn-sm">Download QR</a>
+    <a href="/inventory/{{ spool_id }}" class="btn btn-secondary btn-sm">Back</a>
+  </div>
+</div>
+<div class="grid">
+  <div class="card label-print-area">
+    <h3>Code128 — DYMO LabelManager 280</h3>
+    <p style="font-size:.8rem;color:#6b7280;margin-bottom:12px">
+      Print on 12 mm D1 tape. Scannable with any barcode reader.
+    </p>
+    {% if c128_b64 %}
+      <img src="data:image/png;base64,{{ c128_b64 }}" style="max-width:100%;height:auto" alt="Code128">
+    {% else %}
+      <p class="msg-warn">Code128 generation failed (check python-barcode install)</p>
+    {% endif %}
+    <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
+      <span class="dot" style="background:{{ color }}"></span>
+      <span style="font-size:.85rem"><strong>{{ s.material }}</strong> · {{ s.brand or '' }} · {{ bid }}</span>
+    </div>
+  </div>
+  <div class="card">
+    <h3>QR Code — Phone Camera</h3>
+    <p style="font-size:.8rem;color:#6b7280;margin-bottom:12px">
+      Print on label paper / Brother QL. Opens the scan URL directly.
+    </p>
+    {% if qr_b64 %}
+      <img src="data:image/png;base64,{{ qr_b64 }}" style="max-height:200px;width:auto" alt="QR">
+    {% else %}
+      <p class="msg-warn">QR generation failed (check qrcode install)</p>
+    {% endif %}
+    <p style="font-size:.75rem;color:#9ca3af;margin-top:8px;word-break:break-all">
+      {{ base_url }}/scan/{{ bid }}
+    </p>
+  </div>
+</div>
+<div class="card no-print" style="margin-top:16px;font-size:.85rem;color:#6b7280">
+  <strong>DYMO LabelManager 280 tips:</strong> Use 12 mm D1 tape. Select Code128 in the label maker menu.
+  Type the barcode value <code>{{ bid }}</code> and press the barcode button.
+  Or download the PNG above and print from the DYMO Label software using a LabelWriter.
+</div>
+{% endblock %}

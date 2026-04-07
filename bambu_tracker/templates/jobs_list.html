@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Print History <small style="font-size:.8rem;color:#6b7280">({{ total }} jobs)</small></h2>
+<form class="filter-bar" method="get" action="/jobs">
+  <label>Printer
+    <select name="printer">
+      <option value="">All</option>
+      {% for p in all_printers %}
+        <option value="{{ p.name }}" {% if p.name == q_printer %}selected{% endif %}>{{ p.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Status
+    <select name="status">
+      <option value="">All</option>
+      {% for s in statuses %}
+        <option value="{{ s }}" {% if s == q_status %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button class="btn btn-secondary btn-sm" type="submit">Filter</button>
+  <a href="/jobs" class="btn btn-link btn-sm">Clear</a>
+</form>
+<table>
+  <thead><tr><th>ID</th><th>Printer</th><th>Job Name</th><th>Start</th><th>End</th><th>Status</th><th>Filament</th></tr></thead>
+  <tbody>
+  {% for j in jobs %}
+    {% set state_cls = 'badge-' ~ j.status|lower %}
+    <tr>
+      <td><a href="/jobs/{{ j.id }}">{{ j.id }}</a></td>
+      <td>{{ j.printer_name }}</td>
+      <td>{{ j.subtask_name or '—' }}</td>
+      <td>{{ j.start_str }}</td>
+      <td>{{ j.end_str }}</td>
+      <td><span class="badge {{ state_cls }}">{{ j.status }}</span></td>
+      <td style="font-size:.8rem">{{ j.used_str }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="7" class="empty-msg">No jobs yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{{ pagination|safe }}
+{% endblock %}

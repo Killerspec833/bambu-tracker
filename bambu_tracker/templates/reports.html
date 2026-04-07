@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block extra_head %}
+<script src="{{ chartjs_url }}"></script>
+{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+  <h2>Reports</h2>
+  <form method="get" style="display:flex;gap:8px;align-items:center">
+    <label style="font-size:.85rem;font-weight:600;color:#374151">Period
+      <select name="days" onchange="this.form.submit()">
+        {% for d in [7, 14, 30, 60, 90] %}
+          <option value="{{ d }}" {% if d == days %}selected{% endif %}>{{ d }} days</option>
+        {% endfor %}
+      </select>
+    </label>
+  </form>
+</div>
+
+<div class="grid" style="margin-bottom:24px">
+  <div class="card">
+    <h3>Filament Used by Material (last {{ days }}d)</h3>
+    <div style="max-height:300px;display:flex;align-items:center;justify-content:center">
+      <canvas id="chart-material"></canvas>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Print Jobs per Day (last {{ days }}d)</h3>
+    <canvas id="chart-jobs" style="max-height:300px"></canvas>
+  </div>
+</div>
+
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+  <h2>Low Stock ({{ low_spools|length }} spools)</h2>
+</div>
+<table style="margin-bottom:24px">
+  <thead><tr><th>Spool</th><th>Material</th><th>Brand</th><th>Remaining</th><th>Location</th></tr></thead>
+  <tbody>
+  {% for s in low_spools %}
+    {% set pct = (s.remaining_g / s.total_weight_g * 100)|int if s.total_weight_g else 0 %}
+    <tr>
+      <td><a href="/inventory/{{ s.id }}">{{ s.name }}</a></td>
+      <td>{{ s.material }}</td>
+      <td>{{ s.brand }}</td>
+      <td class="warn-tag">{{ s.remaining_g|int }}g ({{ pct }}%)</td>
+      <td>{{ s.printer_name or 'storage' }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5" class="empty-msg">All spools are well-stocked.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h2>Export &amp; Backup</h2>
+<div class="card">
+  <div style="display:flex;flex-wrap:wrap;gap:10px">
+    <a href="/reports/export/spools.csv" class="btn btn-secondary">Spools CSV</a>
+    <a href="/reports/export/spools.xlsx" class="btn btn-secondary">Spools XLSX</a>
+    <a href="/reports/export/jobs.csv" class="btn btn-secondary">Jobs CSV</a>
+    <a href="/reports/export/jobs.xlsx" class="btn btn-secondary">Jobs XLSX</a>
+    <a href="/reports/export/events.csv" class="btn btn-secondary">Stock Events CSV</a>
+    <a href="/reports/backup.json" class="btn btn-secondary">Full Backup JSON</a>
+  </div>
+</div>
+
+<script>
+new Chart(document.getElementById('chart-material'), {
+  type: 'doughnut',
+  data: {
+    labels: {{ mat_labels|safe }},
+    datasets: [{ data: {{ mat_data|safe }}, backgroundColor: {{ mat_colors|safe }}, borderWidth: 2 }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: true,
+    plugins: { legend: { position: 'right' } }
+  }
+});
+new Chart(document.getElementById('chart-jobs'), {
+  type: 'bar',
+  data: { labels: {{ bar_labels|safe }}, datasets: {{ bar_datasets|safe }} },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
+    plugins: { legend: { position: 'top' } }
+  }
+});
+</script>
+{% endblock %}

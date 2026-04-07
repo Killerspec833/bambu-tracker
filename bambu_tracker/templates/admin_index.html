@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+  <h2>User Management</h2>
+  <a href="/admin/user/new" class="btn btn-primary btn-sm">+ New User</a>
+</div>
+<table>
+  <thead><tr>
+    <th>ID</th><th>Username</th><th>Email</th><th>Role</th>
+    <th>Active</th><th>Last Login</th><th>Actions</th>
+  </tr></thead>
+  <tbody>
+  {% for u in users %}
+    <tr>
+      <td>{{ u.id }}</td>
+      <td><strong>{{ u.username }}</strong></td>
+      <td>{{ u.email }}</td>
+      <td><span class="badge badge-{{ u.role }}">{{ u.role }}</span></td>
+      <td>{% if u.is_active %}Yes{% else %}<span class="warn-tag">No</span>{% endif %}</td>
+      <td>{{ u.last_login_at|fmt_dt('Never') }}</td>
+      <td>
+        {% set toggle_action = 'disable' if u.is_active else 'enable' %}
+        <form method="post" action="/admin/user/{{ u.id }}/{{ toggle_action }}" style="display:inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-xs btn-secondary" type="submit">{{ toggle_action|capitalize }}</button>
+        </form>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="7" class="empty-msg">No users.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+<div style="margin-top:24px">
+  <a href="/admin/audit" class="btn btn-secondary btn-sm">Audit Log</a>
+</div>
+{% endblock %}

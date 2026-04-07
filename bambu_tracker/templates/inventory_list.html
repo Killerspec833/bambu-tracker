@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block content %}
+{% if msg %}
+  <div class="msg-{{ kind }}">{{ msg }}</div>
+{% endif %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+  <h2>Filament Inventory <small style="font-size:.8rem;color:#6b7280">({{ total }} spools)</small></h2>
+  <a href="/inventory/add" class="btn btn-primary btn-sm">+ Add Spool</a>
+</div>
+<form class="filter-bar" method="get" action="/inventory">
+  <label>Search <input type="text" name="q" value="{{ q }}" placeholder="name, brand, barcode…"></label>
+  <label>Material
+    <select name="material">
+      <option value="">All</option>
+      {% for m in materials %}
+        <option value="{{ m }}" {% if m == material %}selected{% endif %}>{{ m }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Brand <input type="text" name="brand" value="{{ brand }}" placeholder="Any brand"></label>
+  <label style="flex-direction:row;align-items:center;gap:6px;margin-top:0">
+    <input type="checkbox" name="low_stock" value="1" {% if low_stock %}checked{% endif %}> Low stock only
+  </label>
+  <button class="btn btn-secondary btn-sm" type="submit">Filter</button>
+  <a href="/inventory" class="btn btn-link btn-sm">Clear</a>
+</form>
+<table>
+  <thead><tr>
+    <th>Barcode</th>
+    <th>{{ sort_links.name|safe }}</th>
+    <th>{{ sort_links.material|safe }}</th>
+    <th>{{ sort_links.brand|safe }}</th>
+    <th>Location</th>
+    <th>{{ sort_links.remaining_g|safe }}</th>
+    <th>Actions</th>
+  </tr></thead>
+  <tbody>
+  {% for s in rows %}
+    {% set color = s.color_safe %}
+    {% set rem = s.remaining_g|float %}
+    {% set total_w = s.total_weight_g|float if s.total_weight_g else 1 %}
+    {% set pct = (rem / total_w * 100)|int if total_w else 0 %}
+    {% set pct_cls = 'pct-low' if pct <= 15 else ('pct-mid' if pct <= 35 else 'pct-ok') %}
+    <tr>
+      <td><code style="font-size:.78rem">{{ s.barcode_id or '' }}</code></td>
+      <td><a href="/inventory/{{ s.id }}">{{ s.name }}</a></td>
+      <td><span class="dot" style="background:{{ color }}"></span>{{ s.material }}</td>
+      <td>{{ s.brand or '' }}</td>
+      <td>{{ s.location_str|safe }}</td>
+      <td>
+        {% if rem <= (s.low_stock_threshold_g|float) %}<span class="warn-tag">⚠ </span>{% endif %}
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="pct-bar"><div class="pct-fill {{ pct_cls }}" style="width:{{ pct }}%"></div></div>
+          <span style="white-space:nowrap">{{ rem|int }}g ({{ pct }}%)</span>
+        </div>
+      </td>
+      <td style="white-space:nowrap">
+        <a href="/inventory/{{ s.id }}/edit" class="btn btn-xs btn-secondary">Edit</a>
+        <a href="/labels/{{ s.id }}" class="btn btn-xs btn-secondary">Label</a>
+        <form method="post" action="/inventory/{{ s.id }}/delete" style="display:inline"
+              onsubmit="return confirm('Delete spool {{ s.name }}?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-xs btn-danger" type="submit">Del</button>
+        </form>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="7" class="empty-msg">No spools found.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{{ pagination|safe }}
+{% endblock %}

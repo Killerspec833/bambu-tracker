@@ -1,3 +1,15 @@
 flask>=3.0.0
 paho-mqtt>=2.0.0
 pyyaml>=6.0
+sqlalchemy>=2.0
+psycopg2-binary>=2.9
+alembic>=1.13
+flask-login>=0.6
+flask-wtf>=1.2
+flask-limiter>=3.5
+bcrypt>=4.0
+python-barcode[images]>=0.15
+qrcode[pil]>=7.4
+openpyxl>=3.1
+cryptography>=42.0
+pillow>=10.0

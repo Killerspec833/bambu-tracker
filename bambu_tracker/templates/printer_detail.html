@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block extra_head %}
+<script>
+(function poll() {
+  setTimeout(function() {
+    fetch('/api/printers/{{ printer_id }}/state')
+      .then(r => r.json())
+      .then(d => {
+        document.getElementById('p-state').textContent = d.state;
+        document.getElementById('p-job').textContent = d.current_job || 'No active job';
+        document.getElementById('p-seen').textContent = (d.last_seen_at||'').slice(0,16).replace('T',' ');
+      }).catch(()=>{}).finally(poll);
+  }, 5000);
+})();
+</script>
+{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+  <h2>{{ p.name }}</h2>
+  <span class="badge badge-{{ (p.state or 'IDLE')|lower }}">{{ p.state or 'IDLE' }}</span>
+</div>
+<div class="grid2" style="margin-bottom:20px">
+  <div class="stat-card"><div class="stat-val" style="font-size:1.4rem" id="p-state">{{ p.state or 'IDLE' }}</div><div class="stat-label">State</div></div>
+  <div class="stat-card"><div class="stat-val" style="font-size:1.1rem" id="p-job">{{ p.current_job or 'No active job' }}</div><div class="stat-label">Current Job</div></div>
+  <div class="stat-card"><div class="stat-val" style="font-size:1rem" id="p-seen">{{ p.seen_str }}</div><div class="stat-label">Last Seen</div></div>
+  <div class="stat-card"><div class="stat-val" style="font-size:1rem">{{ p.model }}</div><div class="stat-label">Model · {{ p.serial }}</div></div>
+</div>
+
+<h3>AMS Slots</h3>
+<table>
+  <thead><tr><th>Slot</th><th>Material</th><th>Level</th><th>Spool</th></tr></thead>
+  <tbody>
+  {% for slot in ams_slots %}
+    {% set pct = slot.pct %}
+    {% set pct_cls = 'pct-low' if pct <= 15 else ('pct-mid' if pct <= 35 else 'pct-ok') %}
+    <tr>
+      <td>S{{ slot.index }}</td>
+      <td><span class="dot" style="background:{{ slot.color }}"></span>{{ slot.material }}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="pct-bar"><div class="pct-fill {{ pct_cls }}" style="width:{{ pct }}%"></div></div>
+          <span style="white-space:nowrap">{{ pct }}%</span>
+        </div>
+      </td>
+      <td>{{ slot.spool_link|safe }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="4" class="empty-msg">No AMS data yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h3 style="margin-top:24px">Print History</h3>
+<table>
+  <thead><tr><th>ID</th><th>Job Name</th><th>Start</th><th>End</th>
+         <th>Duration</th><th>Status</th><th>Filament Used</th></tr></thead>
+  <tbody>
+  {% for j in jobs %}
+    {% set state_cls = 'badge-' ~ j.status|lower %}
+    <tr>
+      <td><a href="/jobs/{{ j.id }}">{{ j.id }}</a></td>
+      <td>{{ j.subtask_name or '—' }}</td>
+      <td>{{ j.start_str }}</td>
+      <td>{{ j.end_str }}</td>
+      <td>{{ j.dur_str }}</td>
+      <td><span class="badge {{ state_cls }}">{{ j.status }}</span></td>
+      <td style="font-size:.8rem">{{ j.used_str }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="7" class="empty-msg">No jobs yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{{ pagination|safe }}
+{% endblock %}

@@ -78,12 +78,13 @@ class BambuMQTTClient:
         token = self._read_token()
         client.username_pw_set(username=self._cloud_username, password=token)
 
-        # Bambu Lab uses self-signed certs; cert verification intentionally disabled
+        # Bambu Lab cloud MQTT uses a self-signed certificate; hostname checking
+        # and certificate verification are intentionally disabled.  This is the
+        # documented approach for the Bambu MQTT API.
         tls_ctx = ssl.create_default_context()
         tls_ctx.check_hostname = False
         tls_ctx.verify_mode = ssl.CERT_NONE
         client.tls_set_context(tls_ctx)
-        client.tls_insecure_set(True)
 
         client.on_connect = self._on_connect
         client.on_disconnect = self._on_disconnect
@@ -225,12 +226,15 @@ class BambuMQTTClient:
         if self._started:
             logger.warning("[%s] start() called more than once; ignoring.", self._name)
             return
-        self._started = True
-        threading.Thread(
+        t = threading.Thread(
             target=self._run_loop,
             name=f"mqtt-{self._name}",
             daemon=True,
-        ).start()
+        )
+        # Set _started only after the thread object is created so that a
+        # ThreadError here does not leave the object permanently unusable.
+        self._started = True
+        t.start()
 
     def stop(self) -> None:
         self._stop_event.set()

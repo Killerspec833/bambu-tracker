@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ form_title }}</h2>
+<form class="card" method="post" action="{{ action }}" style="max-width:560px">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="form-row">
+    <label>Name * <input type="text" name="name" value="{{ values.name or '' }}" required></label>
+    <label>Brand <input type="text" name="brand" value="{{ values.brand or '' }}"></label>
+  </div>
+  <div class="form-row">
+    <label>Material
+      <select name="material">
+        {% for m in materials %}
+          <option value="{{ m }}" {% if m == (values.material or 'PLA') %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Color (hex) <input type="text" name="color" value="{{ values.color_hex or '#FFFFFF' }}" placeholder="#RRGGBB"></label>
+  </div>
+  <div class="form-row">
+    <label>Total weight (g) <input type="number" name="total_weight_g" step="1" value="{{ values.total_weight_g or 1000 }}"></label>
+    <label>Remaining (g) <input type="number" name="remaining_g" step="1" value="{{ values.remaining_g or 1000 }}"></label>
+  </div>
+  <div class="form-row">
+    <label>Low stock threshold (g) <input type="number" name="low_stock_threshold_g" step="1" value="{{ values.low_stock_threshold_g or 50 }}"></label>
+    <label>Purchase date <input type="date" name="purchase_date" value="{{ values.purchase_date or '' }}"></label>
+  </div>
+  <label>Purchase price ($) <input type="number" name="purchase_price" step="0.01" min="0"
+         value="{{ '%.2f'|format(values.purchase_price_cents / 100) if values.purchase_price_cents else '' }}"></label>
+  <label>Notes <textarea name="notes" rows="2">{{ values.notes or '' }}</textarea></label>
+  <div style="display:flex;gap:10px;margin-top:16px">
+    <button class="btn btn-primary" type="submit">Save</button>
+    <a href="/inventory" class="btn btn-secondary">Cancel</a>
+  </div>
+</form>
+{% endblock %}

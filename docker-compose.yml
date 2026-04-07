@@ -1,0 +1,58 @@
+services:
+
+  # ── Postgres ───────────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bambu_tracker
+      POSTGRES_USER: "${POSTGRES_USER:-bambu}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bambu} -d bambu_tracker"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    # Expose only on localhost by default; remove the binding for production
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  # ── Bambu Tracker app ──────────────────────────────────────────────────────
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      BAMBU_DB_URL: "postgresql://${POSTGRES_USER:-bambu}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/bambu_tracker"
+      BAMBU_SECRET_KEY: "${BAMBU_SECRET_KEY:?BAMBU_SECRET_KEY must be set (min 32 random chars)}"
+      # First-run admin creation (remove after first start)
+      BAMBU_CREATE_ADMIN: "${BAMBU_CREATE_ADMIN:-0}"
+      BAMBU_ADMIN_USER: "${BAMBU_ADMIN_USER:-admin}"
+      BAMBU_ADMIN_EMAIL: "${BAMBU_ADMIN_EMAIL:-admin@local}"
+      BAMBU_ADMIN_PASS: "${BAMBU_ADMIN_PASS:-}"
+    volumes:
+      # Mount your real config.yaml here to enable live printer MQTT.
+      # If not mounted, docker/config.yaml.docker is used automatically.
+      - "${CONFIG_PATH:-/dev/null}:/app/config.yaml.host:ro"
+    ports:
+      - "7070:7070"
+    command: run
+
+  # ── Test runner (docker compose --profile test run --rm test) ──────────────
+  test:
+    build: .
+    profiles: ["test"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      BAMBU_DB_URL: "postgresql://${POSTGRES_USER:-bambu}:${POSTGRES_PASSWORD:-bambu_dev_pass}@db:5432/bambu_tracker"
+      TEST_DB_URL: "postgresql://${POSTGRES_USER:-bambu}:${POSTGRES_PASSWORD:-bambu_dev_pass}@db:5432/bambu_tracker_test"
+    command: test
+
+volumes:
+  postgres_data:

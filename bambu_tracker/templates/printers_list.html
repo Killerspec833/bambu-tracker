@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Printers</h2>
+<table>
+  <thead><tr><th>Name</th><th>Model</th><th>Serial</th><th>Region</th>
+         <th>State</th><th>Current Job</th><th>Last Seen</th></tr></thead>
+  <tbody>
+  {% for p in printers %}
+    {% set state = p.state or 'IDLE' %}
+    {% set state_cls = 'badge-' ~ state|lower %}
+    <tr>
+      <td><a href="/printers/{{ p.id }}" style="font-weight:600">{{ p.name }}</a></td>
+      <td>{{ p.model }}</td>
+      <td><code>{{ p.serial }}</code></td>
+      <td>{{ p.region }}</td>
+      <td><span class="badge {{ state_cls }}">{{ state }}</span></td>
+      <td>{{ p.current_job or '—' }}</td>
+      <td>{{ p.seen_str }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="7" class="empty-msg">No printers. Add printers to config.yaml.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
