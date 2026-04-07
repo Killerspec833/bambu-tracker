@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Settings</h2>
+{% if msg %}
+  <div class="msg-{{ kind }}">{{ msg }}</div>
+{% endif %}
+
+<form class="card" method="post" action="/settings" style="max-width:540px">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <h3>Alert Thresholds</h3>
+  <label>Low Stock Warning (grams)
+    <input type="number" name="low_stock_grams" value="{{ cfg.low_stock_grams }}" min="0" step="1">
+    <small style="color:#6b7280;font-size:.8rem">Alert when a spool falls below this many grams remaining.</small>
+  </label>
+  <label style="display:flex;align-items:center;gap:10px;margin-top:14px">
+    <input type="checkbox" name="pre_print_check" {% if cfg.pre_print_check %}checked{% endif %}>
+    Pre-print stock check (warn before a print if stock is low)
+  </label>
+  <label style="display:flex;align-items:center;gap:10px;margin-top:10px">
+    <input type="checkbox" name="desktop_notify" {% if cfg.desktop %}checked{% endif %}>
+    Desktop notifications via <code>notify-send</code>
+  </label>
+  <label style="display:flex;align-items:center;gap:10px;margin-top:10px">
+    <input type="checkbox" name="openclaw_notify" {% if cfg.openclaw %}checked{% endif %}>
+    OpenClaw system event notifications
+  </label>
+  <div style="margin-top:20px">
+    <button type="submit" class="btn btn-primary">Save Settings</button>
+  </div>
+</form>
+
+<div class="card" style="max-width:540px">
+  <h3>Account</h3>
+  <p style="font-size:.88rem;margin-bottom:12px">Logged in as <strong>{{ current_user.username }}</strong> ({{ current_user.role }})</p>
+  <a href="/account/password" class="btn btn-secondary btn-sm">Change Password</a>
+</div>
+
+<div class="card" style="max-width:540px">
+  <h3>Administration</h3>
+  <p style="font-size:.88rem;margin-bottom:12px">Manage users, view audit log, and download backups.</p>
+  {% if current_user.is_admin() %}
+    <a href="/admin" class="btn btn-secondary btn-sm">Admin Panel</a>
+  {% else %}
+    <p style="color:#9ca3af;font-size:.85rem">Admin panel requires admin role.</p>
+  {% endif %}
+</div>
+{% endblock %}

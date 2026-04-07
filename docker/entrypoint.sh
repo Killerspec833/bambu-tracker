@@ -63,8 +63,31 @@ else:
 PYEOF
   fi
 
+  # ── decide whether to enable MQTT ───────────────────────────────────────
+  # A real config is mounted at /app/config.yaml.host when CONFIG_PATH is set.
+  # /dev/null is the default mount, so check that the file has content.
+  MQTT_FLAG="--no-mqtt"
+  if [ -s /app/config.yaml.host ]; then
+    echo "[entrypoint] Real config.yaml detected — copying and enabling MQTT."
+    cp /app/config.yaml.host /app/config.yaml
+    MQTT_FLAG=""
+  else
+    echo "[entrypoint] No real config mounted (CONFIG_PATH not set) — MQTT disabled."
+  fi
+
   echo "[entrypoint] Starting Bambu Tracker…"
-  exec python3 run.py --no-mqtt
+  # When MQTT is disabled (web-only mode) use Gunicorn for the WSGI layer.
+  # When MQTT is enabled, run.py manages the MQTT threads + a Werkzeug server;
+  # Gunicorn's multi-worker fork model is incompatible with background threads.
+  if [ -z "$MQTT_FLAG" ]; then
+    exec python3 run.py
+  else
+    exec gunicorn wsgi:application \
+      --workers "${GUNICORN_WORKERS:-2}" \
+      --bind "0.0.0.0:7070" \
+      --access-logfile - \
+      --error-logfile -
+  fi
 
 elif [ "$CMD" = "test" ]; then
   echo "[entrypoint] Running smoke tests…"

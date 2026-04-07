@@ -941,6 +941,15 @@ class Inventory:
             ).mappings().fetchall()
         return [dict(r) for r in rows]
 
+    def get_all_alerts(self, limit: int = 200) -> list[dict[str, Any]]:
+        with get_engine().connect() as conn:
+            rows = conn.execute(
+                select(db_alerts)
+                .order_by(db_alerts.c.triggered_at.desc())
+                .limit(limit)
+            ).mappings().fetchall()
+        return [dict(r) for r in rows]
+
     def acknowledge_alert(self, alert_id: int, user_id: int) -> bool:
         with get_engine().begin() as conn:
             acknowledged_by = conn.execute(

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+  <h2>Alerts</h2>
+  <div style="display:flex;gap:8px">
+    {% if show_acked %}
+      <a href="/alerts" class="btn btn-secondary btn-sm">Active only</a>
+    {% else %}
+      <a href="/alerts?show_acked=1" class="btn btn-secondary btn-sm">Show history</a>
+    {% endif %}
+  </div>
+</div>
+
+{% if not alerts %}
+  <p class="empty-msg">No {{ 'alerts' if show_acked else 'active alerts' }}.</p>
+{% else %}
+<table>
+  <thead>
+    <tr>
+      <th>Type</th>
+      <th>Message</th>
+      <th>Triggered</th>
+      <th>Status</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for a in alerts %}
+    {% set acked = a.acknowledged_at is not none %}
+    <tr>
+      <td><span class="badge {{ 'badge-idle' if acked else 'badge-failed' }}">{{ a.alert_type }}</span></td>
+      <td>{{ a.message }}</td>
+      <td style="white-space:nowrap;color:#6b7280;font-size:.82rem">{{ a.triggered_at|fmt_dt }}</td>
+      <td>
+        {% if acked %}
+          <span style="color:#6b7280;font-size:.82rem">Dismissed {{ a.acknowledged_at|fmt_dt }}</span>
+        {% else %}
+          <span class="badge badge-failed">Active</span>
+        {% endif %}
+      </td>
+      <td>
+        {% if not acked %}
+          <form method="post" action="/alerts/{{ a.id }}/ack" style="margin:0">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-xs btn-secondary" type="submit">Dismiss</button>
+          </form>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

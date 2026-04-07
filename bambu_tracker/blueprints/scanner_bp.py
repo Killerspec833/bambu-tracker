@@ -16,7 +16,7 @@ from flask_login import current_user, login_required
 
 scanner_bp = Blueprint("scanner", __name__)
 
-_ZXING_CDN = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/index.min.js"
+_ZXING_CDN = "/static/zxing-browser.min.js"
 
 # ─── PWA manifest ─────────────────────────────────────────────────────────────
 

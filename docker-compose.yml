@@ -19,6 +19,16 @@ services:
     ports:
       - "127.0.0.1:5432:5432"
 
+  # ── Redis (rate-limiter backend) ───────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   # ── Bambu Tracker app ──────────────────────────────────────────────────────
   app:
     build: .
@@ -26,9 +36,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       BAMBU_DB_URL: "postgresql://${POSTGRES_USER:-bambu}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/bambu_tracker"
       BAMBU_SECRET_KEY: "${BAMBU_SECRET_KEY:?BAMBU_SECRET_KEY must be set (min 32 random chars)}"
+      RATELIMIT_STORAGE_URI: "redis://redis:6379"
       # First-run admin creation (remove after first start)
       BAMBU_CREATE_ADMIN: "${BAMBU_CREATE_ADMIN:-0}"
       BAMBU_ADMIN_USER: "${BAMBU_ADMIN_USER:-admin}"
@@ -36,7 +49,7 @@ services:
       BAMBU_ADMIN_PASS: "${BAMBU_ADMIN_PASS:-}"
     volumes:
       # Mount your real config.yaml here to enable live printer MQTT.
-      # If not mounted, docker/config.yaml.docker is used automatically.
+      # If not mounted, docker/config.yaml.docker is used and MQTT is disabled.
       - "${CONFIG_PATH:-/dev/null}:/app/config.yaml.host:ro"
     ports:
       - "7070:7070"

@@ -133,6 +133,7 @@ input[type=checkbox] { width: auto; margin-right: 8px; }
     <a href="/jobs"{% if active_nav == 'History' %} class="active"{% endif %}>History</a>
     <a href="/reports"{% if active_nav == 'Reports' %} class="active"{% endif %}>Reports</a>
     <a href="/scan"{% if active_nav == 'Scanner' %} class="active"{% endif %}>Scanner</a>
+    <a href="/settings"{% if active_nav == 'Settings' %} class="active"{% endif %}>Settings</a>
   </nav>
   <div class="nav-right">
     {% if alert_count > 0 %}
@@ -145,6 +146,7 @@ input[type=checkbox] { width: auto; margin-right: 8px; }
       {% if current_user.is_admin() %}
         <a href="/admin" style="color:#c7d2fe;font-size:.8rem">Admin</a>
       {% endif %}
+      <a href="/account/password" style="color:#c7d2fe;font-size:.8rem">Password</a>
       <a href="/logout" class="btn btn-sm btn-secondary" style="background:#3730a3;color:#c7d2fe;border:none">Logout</a>
     {% endif %}
   </div>

@@ -11,7 +11,8 @@ import logging
 from datetime import date, datetime
 from typing import Any
 
-from flask import Flask, g, redirect, url_for
+from flask import Flask, g, redirect, render_template, request, url_for
+from flask_login import login_required
 from flask_wtf.csrf import CSRFProtect
 
 from .auth import login_manager
@@ -100,10 +101,44 @@ def create_app(
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         return response
 
-    # ── Legacy redirect: /settings → /admin ──────────────────────────────────
-    @app.route("/settings")
-    def settings_redirect():
-        return redirect(url_for("auth.admin_index"))
+    # ── Settings page ─────────────────────────────────────────────────────────
+    alerts_cfg = config.get("alerts", {})
+    _settings_state: dict[str, Any] = {
+        "low_stock_grams": int(alerts_cfg.get("low_stock_grams", 50)),
+        "pre_print_check": bool(alerts_cfg.get("pre_print_check", True)),
+        "desktop": bool(alerts_cfg.get("desktop", True)),
+        "openclaw": bool(alerts_cfg.get("openclaw", True)),
+    }
+
+    @app.route("/settings", methods=["GET", "POST"])
+    @login_required
+    def settings_page():
+        msg, kind = "", "ok"
+        if request.method == "POST":
+            try:
+                val = max(0, int(request.form.get("low_stock_grams", 50)))
+            except (ValueError, TypeError):
+                val = 50
+            _settings_state["low_stock_grams"] = val
+            _settings_state["pre_print_check"] = "pre_print_check" in request.form
+            _settings_state["desktop"] = "desktop_notify" in request.form
+            _settings_state["openclaw"] = "openclaw_notify" in request.form
+            # Propagate into the live AlertManager config dict so changes take
+            # effect immediately without a restart.
+            alerts_cfg["low_stock_grams"] = val
+            alerts_cfg["pre_print_check"] = _settings_state["pre_print_check"]
+            alerts_cfg["desktop"] = _settings_state["desktop"]
+            alerts_cfg["openclaw"] = _settings_state["openclaw"]
+            msg, kind = "Settings saved.", "ok"
+        return render_template(
+            "settings.html",
+            title="Settings",
+            active_nav="Settings",
+            alert_count=len(g.inv.get_active_alerts()),
+            cfg=_settings_state,
+            msg=msg,
+            kind=kind,
+        )
 
     # ── Legacy redirect: /history → /jobs ────────────────────────────────────
     @app.route("/history")

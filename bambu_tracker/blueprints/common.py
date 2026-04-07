@@ -217,6 +217,7 @@ def page(
         _nav_link("History", "/jobs", active_nav),
         _nav_link("Reports", "/reports", active_nav),
         _nav_link("Scanner", "/scan", active_nav),
+        _nav_link("Settings", "/settings", active_nav),
     ])
 
     # Right side: alerts + user info
@@ -227,7 +228,7 @@ def page(
         user_html = f'<span>{h(current_user.username)} <small>({h(current_user.role)})</small></span>'
         if current_user.is_admin():
             admin_link = '<a href="/admin" style="color:#c7d2fe;font-size:.8rem">Admin</a> '
-        user_html += f' {admin_link}<a href="/logout" class="btn btn-sm btn-secondary" style="background:#3730a3;color:#c7d2fe;border:none">Logout</a>'
+        user_html += f' {admin_link}<a href="/account/password" style="color:#c7d2fe;font-size:.8rem">Password</a> <a href="/logout" class="btn btn-sm btn-secondary" style="background:#3730a3;color:#c7d2fe;border:none">Logout</a>'
 
     alert_html = ""
     if alert_count > 0:

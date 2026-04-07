@@ -5,6 +5,8 @@ import logging
 import os
 import ssl
 import threading
+import time
+from datetime import datetime, timezone
 from typing import Any, Callable
 
 import paho.mqtt.client as mqtt
@@ -54,6 +56,9 @@ class BambuMQTTClient:
         self._client_lock = threading.Lock()
         self._started = False
         self._stop_event = threading.Event()
+        # Token staleness: track last successful connect time to detect expiry
+        self._last_connected_at: datetime | None = None
+        self._token_alert_cb: Callable[[str, str], None] | None = None
 
     def _read_token(self) -> str:
         if not self._cloud_token_file:
@@ -93,6 +98,10 @@ class BambuMQTTClient:
 
     # ---------------------------------------------------------------- MQTT callbacks
 
+    def set_token_alert_callback(self, cb: Callable[[str, str], None]) -> None:
+        """Register a callback(printer_name, message) fired when the token looks stale."""
+        self._token_alert_cb = cb
+
     def _on_connect(
         self,
         client: mqtt.Client,
@@ -103,11 +112,25 @@ class BambuMQTTClient:
         try:
             if rc == 0:
                 logger.info("[%s] Connected to Bambu Cloud MQTT.", self._name)
+                self._last_connected_at = datetime.now(timezone.utc)
                 result, _ = client.subscribe(self._topic, qos=0)
                 if result != mqtt.MQTT_ERR_SUCCESS:
                     logger.warning(
                         "[%s] subscribe() failed, rc=%d.", self._name, result
                     )
+            elif rc == 4:
+                # rc=4 → bad credentials; most likely an expired token
+                msg = (
+                    f"[{self._name}] MQTT auth failed (rc=4) — "
+                    "Bambu Cloud token is likely expired. "
+                    f"Refresh {self._cloud_token_file!r} and restart."
+                )
+                logger.error(msg)
+                if self._token_alert_cb:
+                    try:
+                        self._token_alert_cb(self._name, msg)
+                    except Exception:
+                        pass
             else:
                 logger.warning("[%s] MQTT connect failed, rc=%d.", self._name, rc)
         except Exception as exc:

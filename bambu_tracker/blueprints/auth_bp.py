@@ -7,10 +7,13 @@ from ..auth import (
     check_password,
     create_user,
     get_user_by_username,
+    hash_password,
     list_users,
     record_login,
     set_user_active,
 )
+from ..db import get_engine, users as users_table
+from sqlalchemy import update as _update
 from ..limiter import limiter
 from .common import require_admin
 
@@ -120,3 +123,42 @@ def admin_audit():
     entries = [dict(e) for e in entries]
     return render_template("audit_log.html", title="Audit Log", entries=entries,
                            q_action=q_action, active_nav="", alert_count=0)
+
+
+# ─── account: change password ─────────────────────────────────────────────────
+
+@auth_bp.route("/account/password", methods=["GET", "POST"])
+@login_required
+def change_password():
+    from flask import g
+    msg, kind = "", "ok"
+    if request.method == "POST":
+        current_pw = request.form.get("current_password", "")
+        new_pw = request.form.get("new_password", "")
+        confirm_pw = request.form.get("confirm_password", "")
+
+        if not check_password(current_pw, current_user._row["password_hash"]):
+            msg, kind = "Current password is incorrect.", "err"
+        elif len(new_pw) < 8:
+            msg, kind = "New password must be at least 8 characters.", "err"
+        elif new_pw != confirm_pw:
+            msg, kind = "New passwords do not match.", "err"
+        else:
+            with get_engine().begin() as conn:
+                conn.execute(
+                    _update(users_table)
+                    .where(users_table.c.id == current_user.id)
+                    .values(password_hash=hash_password(new_pw))
+                )
+            g.inv.record_audit("user.password_change", user_id=current_user.id,
+                               ip_address=request.remote_addr or "")
+            msg, kind = "Password updated successfully.", "ok"
+
+    return render_template(
+        "change_password.html",
+        title="Change Password",
+        active_nav="",
+        alert_count=0,
+        msg=msg,
+        kind=kind,
+    )

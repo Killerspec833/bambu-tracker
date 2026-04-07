@@ -17,7 +17,7 @@ from .common import require_admin
 
 reports_bp = Blueprint("reports", __name__)
 
-_CHARTJS = "https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"
+_CHARTJS = "/static/chart.umd.min.js"
 
 
 def _active_alerts() -> int:

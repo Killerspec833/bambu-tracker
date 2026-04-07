@@ -250,6 +250,17 @@ def main() -> None:
                 on_job_start=on_start,
                 on_job_finish=on_finish,
             )
+
+            def _make_token_alert_cb(p_id: int) -> Any:
+                def _on_token_expired(pname: str, message: str) -> None:
+                    alert_manager._send(f"MQTT auth failed for {pname} — token expired", urgency="critical")
+                    try:
+                        inv.create_alert("printer_offline", message, printer_id=p_id)
+                    except Exception:
+                        logger.exception("Failed to create token-expiry alert in DB.")
+                return _on_token_expired
+
+            client.set_token_alert_callback(_make_token_alert_cb(printer_id))
             mqtt_clients.append(client)
 
     if not printers:

@@ -391,6 +391,24 @@ def label_qr(spool_id: int):
                     headers={"Content-Disposition": f'attachment; filename="{s["barcode_id"]}_qr.png"'})
 
 
+# ─── alerts list ─────────────────────────────────────────────────────────────
+
+@inventory_bp.route("/alerts")
+@login_required
+def alerts_list():
+    inv = g.inv
+    show_acked = request.args.get("show_acked", "") == "1"
+    alerts = inv.get_active_alerts() if not show_acked else inv.get_all_alerts(limit=200)
+    return render_template(
+        "alerts.html",
+        title="Alerts",
+        active_nav="",
+        alert_count=len(inv.get_active_alerts()),
+        alerts=[dict(a) for a in alerts],
+        show_acked=show_acked,
+    )
+
+
 # ─── alert acknowledgement ────────────────────────────────────────────────────
 
 @inventory_bp.route("/alerts/<int:alert_id>/ack", methods=["POST"])
