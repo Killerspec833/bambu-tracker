@@ -1,6 +1,12 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>Printers</h2>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+  <h2>Printers</h2>
+  <button class="btn btn-secondary btn-sm" onclick="document.getElementById('token-modal').style.display='flex'">
+    &#x1F511; Refresh Cloud Token
+  </button>
+</div>
+
 <table>
   <thead><tr><th>Name</th><th>Model</th><th>Serial</th><th>Region</th>
          <th>State</th><th>Current Job</th><th>Last Seen</th></tr></thead>
@@ -22,4 +28,106 @@
   {% endfor %}
   </tbody>
 </table>
+
+{# ── Token refresh modal ──────────────────────────────────────────────────── #}
+<div id="token-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);
+     z-index:1000;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;padding:28px;width:100%;max-width:420px;
+              box-shadow:0 8px 32px #0003;margin:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h3 style="margin:0">Refresh Bambu Cloud Token</h3>
+      <button onclick="closeModal()" style="background:none;border:none;font-size:1.4rem;
+              cursor:pointer;color:#6b7280;line-height:1">&times;</button>
+    </div>
+    <p style="font-size:.85rem;color:#6b7280;margin-bottom:16px">
+      Enter your <strong>bambulab.com</strong> account credentials.
+      The token will be saved to the configured token file and used immediately for MQTT.
+      Your password is sent only to Bambu Lab — it is not stored.
+    </p>
+    <div id="modal-msg" style="display:none;margin-bottom:12px"></div>
+    <label style="display:block;font-size:.85rem;font-weight:600;color:#374151;margin-bottom:4px">
+      Email
+      <input id="tok-email" type="email" placeholder="you@example.com" autocomplete="username"
+             style="display:block;width:100%;margin-top:4px;padding:8px 12px;border:1px solid #d1d5db;
+                    border-radius:6px;font-size:.9rem">
+    </label>
+    <label style="display:block;font-size:.85rem;font-weight:600;color:#374151;margin-top:12px;margin-bottom:4px">
+      Password
+      <input id="tok-password" type="password" autocomplete="current-password"
+             style="display:block;width:100%;margin-top:4px;padding:8px 12px;border:1px solid #d1d5db;
+                    border-radius:6px;font-size:.9rem">
+    </label>
+    <p style="font-size:.78rem;color:#9ca3af;margin-top:8px">
+      If MFA is enabled on your account, approve the Bambu app prompt first, then click Fetch.
+    </p>
+    <div style="display:flex;gap:10px;margin-top:20px">
+      <button id="tok-btn" class="btn btn-primary" onclick="fetchToken()">Fetch &amp; Save Token</button>
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_head %}
+<script>
+function closeModal() {
+  document.getElementById('token-modal').style.display = 'none';
+  document.getElementById('modal-msg').style.display = 'none';
+  document.getElementById('tok-password').value = '';
+}
+
+function showMsg(text, ok) {
+  const el = document.getElementById('modal-msg');
+  el.textContent = text;
+  el.className = ok ? 'msg-ok' : 'msg-err';
+  el.style.display = 'block';
+}
+
+async function fetchToken() {
+  const email = document.getElementById('tok-email').value.trim();
+  const password = document.getElementById('tok-password').value;
+  const btn = document.getElementById('tok-btn');
+
+  if (!email || !password) {
+    showMsg('Email and password are required.', false);
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Fetching…';
+  document.getElementById('modal-msg').style.display = 'none';
+
+  const form = new FormData();
+  form.append('email', email);
+  form.append('password', password);
+  form.append('csrf_token', '{{ csrf_token() }}');
+
+  try {
+    const resp = await fetch('/printers/refresh-token', { method: 'POST', body: form });
+    const data = await resp.json();
+    if (data.ok) {
+      showMsg(`Token saved to ${data.path} (${data.length} chars). Restart the app to reconnect MQTT.`, true);
+      document.getElementById('tok-password').value = '';
+    } else {
+      showMsg(data.error || 'Unknown error.', false);
+    }
+  } catch (e) {
+    showMsg('Network error: ' + e, false);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Fetch & Save Token';
+  }
+}
+
+// Close modal on backdrop click
+document.getElementById('token-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+// Submit on Enter in password field
+document.getElementById('tok-password')?.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') fetchToken();
+});
+</script>
 {% endblock %}

@@ -8,11 +8,12 @@ and injects the Inventory instance into request context via g.
 """
 
 import logging
+import os
 from datetime import date, datetime
 from typing import Any
 
-from flask import Flask, g, redirect, render_template, request, url_for
-from flask_login import login_required
+from flask import Flask, g, jsonify, redirect, render_template, request, url_for
+from flask_login import current_user, login_required
 from flask_wtf.csrf import CSRFProtect
 
 from .auth import login_manager
@@ -139,6 +140,79 @@ def create_app(
             msg=msg,
             kind=kind,
         )
+
+    # ── Bambu Cloud token refresh ─────────────────────────────────────────────
+    _token_file: str = os.path.expanduser(
+        config.get("cloud_auth", {}).get("token_file", "~/.bambu_token")
+    )
+    app.config["BAMBU_TOKEN_FILE"] = _token_file
+
+    @app.route("/printers/refresh-token", methods=["POST"])
+    @login_required
+    @limiter.limit("5 per minute")
+    def refresh_bambu_token():
+        import json as _json
+        import urllib.request as _req
+        import urllib.error as _err
+
+        email = (request.form.get("email") or "").strip()
+        password = request.form.get("password") or ""
+        if not email or not password:
+            return jsonify({"ok": False, "error": "Email and password are required."}), 400
+
+        payload = _json.dumps({"account": email, "password": password}).encode()
+        api_req = _req.Request(
+            "https://bambulab.com/api/sign-in/form",
+            data=payload,
+            headers={"Content-Type": "application/json", "User-Agent": "BambuTracker/1.0"},
+            method="POST",
+        )
+        try:
+            with _req.urlopen(api_req, timeout=15) as resp:
+                body = resp.read().decode()
+        except _err.HTTPError as e:
+            body = e.read().decode()
+            try:
+                msg = _json.loads(body).get("message") or str(e)
+            except Exception:
+                msg = str(e)
+            if e.code == 400:
+                msg = "Login failed — if MFA is enabled, approve the Bambu app prompt first then retry."
+            elif e.code == 401:
+                msg = "Invalid email or password."
+            return jsonify({"ok": False, "error": msg}), 200
+        except Exception as e:
+            return jsonify({"ok": False, "error": f"Network error: {e}"}), 200
+
+        try:
+            data = _json.loads(body)
+        except Exception:
+            return jsonify({"ok": False, "error": "Unexpected response from Bambu API."}), 200
+
+        token = (
+            data.get("token")
+            or data.get("accessToken")
+            or data.get("access_token")
+            or (data.get("data") or {}).get("token")
+            or (data.get("data") or {}).get("accessToken")
+        )
+        if not token:
+            return jsonify({"ok": False, "error": f"Token not found in response: {list(data.keys())}"}), 200
+
+        token_path = app.config["BAMBU_TOKEN_FILE"]
+        try:
+            import pathlib as _pl
+            p = _pl.Path(token_path)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(token + "\n")
+            p.chmod(0o600)
+        except Exception as e:
+            return jsonify({"ok": False, "error": f"Could not write token file: {e}"}), 200
+
+        g.inv.record_audit("cloud_token.refresh", user_id=current_user.id,
+                           ip_address=request.remote_addr or "")
+        logger.info("Bambu Cloud token refreshed by user %s, saved to %s", current_user.username, token_path)
+        return jsonify({"ok": True, "path": token_path, "length": len(token)})
 
     # ── Legacy redirect: /history → /jobs ────────────────────────────────────
     @app.route("/history")
