@@ -34,3 +34,7 @@ Thumbs.db
 # Claude
 .claude/
 subagent-plans-*.json
+
+# Runtime artifacts
+automation/*.log
+automation/orchestrator-status.json
