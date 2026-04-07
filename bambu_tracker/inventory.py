@@ -943,10 +943,13 @@ class Inventory:
 
     def acknowledge_alert(self, alert_id: int, user_id: int) -> bool:
         with get_engine().begin() as conn:
+            acknowledged_by = conn.execute(
+                select(users.c.id).where(users.c.id == user_id)
+            ).scalar_one_or_none()
             result = conn.execute(
                 update(db_alerts)
                 .where(db_alerts.c.id == alert_id)
-                .values(acknowledged_at=_now(), acknowledged_by=user_id)
+                .values(acknowledged_at=_now(), acknowledged_by=acknowledged_by)
             )
         return result.rowcount > 0
 

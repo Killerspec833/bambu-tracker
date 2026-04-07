@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import sys
+from itertools import count
 
 import pytest
 
@@ -21,6 +22,7 @@ TEST_DB_URL = os.environ.get(
     "TEST_DB_URL",
     "postgresql://bambu:bambu_dev_pass@localhost:5432/bambu_tracker_test",
 )
+_LOGIN_ADDR_COUNTER = count(10)
 
 
 # ── create test database if it doesn't exist ──────────────────────────────────
@@ -115,6 +117,7 @@ def authed_client(client, admin_user):
         "/login",
         data={"username": admin_user["username"], "password": admin_user["password"]},
         follow_redirects=False,
+        environ_overrides={"REMOTE_ADDR": f"127.0.0.{next(_LOGIN_ADDR_COUNTER)}"},
     )
     # Should redirect to dashboard (302) or already at dashboard (200)
     assert resp.status_code in (200, 302), f"Login failed: {resp.status_code}"
