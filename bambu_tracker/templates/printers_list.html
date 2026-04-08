@@ -31,7 +31,8 @@
 
 {# ── Token refresh modal ──────────────────────────────────────────────────── #}
 <div id="token-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);
-     z-index:1000;align-items:center;justify-content:center">
+     z-index:1000;align-items:center;justify-content:center"
+     onclick="if(event.target===this)closeModal()">
   <div style="background:#fff;border-radius:12px;padding:28px;width:100%;max-width:420px;
               box-shadow:0 8px 32px #0003;margin:16px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
@@ -69,7 +70,7 @@
 
 {% endblock %}
 
-{% block extra_head %}
+{% block extra_scripts %}
 <script>
 function closeModal() {
   document.getElementById('token-modal').style.display = 'none';
@@ -119,11 +120,6 @@ async function fetchToken() {
     btn.textContent = 'Fetch & Save Token';
   }
 }
-
-// Close modal on backdrop click
-document.getElementById('token-modal').addEventListener('click', function(e) {
-  if (e.target === this) closeModal();
-});
 
 // Submit on Enter in password field
 document.getElementById('tok-password')?.addEventListener('keydown', function(e) {

@@ -72,7 +72,8 @@
 
 {# ── Assign modal ──────────────────────────────────────────────────────────── #}
 <div id="assign-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);
-     z-index:1000;align-items:center;justify-content:center">
+     z-index:1000;align-items:center;justify-content:center"
+     onclick="if(event.target===this)closeAssign()">
   <div style="background:#fff;border-radius:12px;padding:28px;width:100%;max-width:400px;
               box-shadow:0 8px 32px #0003;margin:16px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
@@ -117,7 +118,7 @@
 
 {% endblock %}
 
-{% block extra_head %}
+{% block extra_scripts %}
 <script>
 let _assignSpoolId = null;
 const _csrfToken = '{{ csrf_token() }}';
@@ -213,9 +214,6 @@ async function doUnload() {
   }
 }
 
-// Close on backdrop click
-document.getElementById('assign-modal').addEventListener('click', function(e) {
-  if (e.target === this) closeAssign();
-});
+// Backdrop click handled by onclick on the element itself
 </script>
 {% endblock %}

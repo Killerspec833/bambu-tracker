@@ -33,12 +33,16 @@
     <a href="/inventory" class="btn btn-secondary">Cancel</a>
     {% if spool_id %}
       <span style="flex:1"></span>
-      <form method="post" action="/inventory/{{ spool_id }}/delete" style="margin:0"
-            onsubmit="return confirm('Permanently delete this spool? This cannot be undone.')">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button class="btn btn-danger btn-sm" type="submit">Delete Spool</button>
-      </form>
+      <button type="button" class="btn btn-danger btn-sm"
+              onclick="if(confirm('Permanently delete this spool? This cannot be undone.')) document.getElementById('delete-form').submit()">
+        Delete Spool
+      </button>
     {% endif %}
   </div>
 </form>
+{% if spool_id %}
+<form id="delete-form" method="post" action="/inventory/{{ spool_id }}/delete" style="display:none">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
+{% endif %}
 {% endblock %}
