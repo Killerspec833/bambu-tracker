@@ -51,6 +51,9 @@ services:
       # Mount your real config.yaml here to enable live printer MQTT.
       # If not mounted, docker/config.yaml.docker is used and MQTT is disabled.
       - "${CONFIG_PATH:-/dev/null}:/app/config.yaml.host:ro"
+      # Mount your Bambu Cloud token file (path set by TOKEN_FILE in .env).
+      # The entrypoint rewrites token_file in the copied config to this path.
+      - "${TOKEN_FILE:-/dev/null}:/app/.bambu_token.host:ro"
     ports:
       - "7070:7070"
     command: run

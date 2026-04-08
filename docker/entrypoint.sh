@@ -70,6 +70,25 @@ PYEOF
   if [ -s /app/config.yaml.host ]; then
     echo "[entrypoint] Real config.yaml detected — copying and enabling MQTT."
     cp /app/config.yaml.host /app/config.yaml
+
+    # If a token file was mounted, copy it and rewrite token_file path in config
+    # so the app finds it at the container-local path regardless of what the
+    # host path was.
+    if [ -s /app/.bambu_token.host ]; then
+      cp /app/.bambu_token.host /app/.bambu_token
+      chmod 600 /app/.bambu_token
+      echo "[entrypoint] Token file mounted — rewriting token_file path in config."
+      python3 -c "
+import re, sys
+path = '/app/config.yaml'
+text = open(path).read()
+text = re.sub(r'token_file:.*', 'token_file: \"/app/.bambu_token\"', text)
+open(path, 'w').write(text)
+"
+    else
+      echo "[entrypoint] Warning: CONFIG_PATH is set but TOKEN_FILE is not — MQTT may fail if token_file path is not accessible inside the container."
+    fi
+
     MQTT_FLAG=""
   else
     echo "[entrypoint] No real config mounted (CONFIG_PATH not set) — MQTT disabled."
