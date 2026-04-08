@@ -15,7 +15,18 @@
         {% endfor %}
       </select>
     </label>
-    <label>Color (hex) <input type="text" name="color" value="{{ values.color_hex or '#FFFFFF' }}" placeholder="#RRGGBB"></label>
+    <label>Color
+      <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
+        <input type="color" name="color" id="color-picker"
+               value="{{ values.color_hex or '#FFFFFF' }}"
+               style="width:44px;height:36px;padding:2px;border:1px solid #d1d5db;border-radius:6px;cursor:pointer"
+               oninput="document.getElementById('color-text').value=this.value">
+        <input type="text" id="color-text" placeholder="#RRGGBB"
+               value="{{ values.color_hex or '#FFFFFF' }}"
+               style="flex:1;margin-top:0"
+               oninput="syncColor(this.value)">
+      </div>
+    </label>
   </div>
   <div class="form-row">
     <label>Total weight (g) <input type="number" name="total_weight_g" step="1" value="{{ values.total_weight_g or 1000 }}"></label>
@@ -32,6 +43,13 @@
     <button class="btn btn-primary" type="submit">Save</button>
     <a href="/inventory" class="btn btn-secondary">Cancel</a>
     {% if spool_id %}
+      <button type="button" class="btn btn-secondary btn-sm"
+              data-spool-id="{{ spool_id }}"
+              data-spool-name="{{ values.name }}"
+              data-location="{{ (values.printer_name ~ ' / S' ~ values.current_slot) if values.printer_name else 'storage' }}"
+              onclick="openAssign(this)">
+        Assign to Printer
+      </button>
       <span style="flex:1"></span>
       <button type="button" class="btn btn-danger btn-sm"
               onclick="if(confirm('Permanently delete this spool? This cannot be undone.')) document.getElementById('delete-form').submit()">
@@ -44,5 +62,153 @@
 <form id="delete-form" method="post" action="/inventory/{{ spool_id }}/delete" style="display:none">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 </form>
+
+{# ── Assign modal ──────────────────────────────────────────────────────────── #}
+<div id="assign-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);
+     z-index:1000;align-items:center;justify-content:center"
+     onclick="if(event.target===this)closeAssign()">
+  <div style="background:#fff;border-radius:12px;padding:28px;width:100%;max-width:400px;
+              box-shadow:0 8px 32px #0003;margin:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <h3 style="margin:0">Assign Spool</h3>
+      <button onclick="closeAssign()" style="background:none;border:none;font-size:1.4rem;
+              cursor:pointer;color:#6b7280;line-height:1">&times;</button>
+    </div>
+    <p id="assign-spool-name" style="font-size:.85rem;color:#6b7280;margin-bottom:16px"></p>
+    <div id="assign-msg" style="display:none;margin-bottom:12px"></div>
+    <div id="assign-current" style="display:none;margin-bottom:14px;padding:10px 14px;
+         background:#fef9c3;border-radius:6px;font-size:.85rem;color:#854d0e">
+      Currently loaded: <strong id="assign-current-loc"></strong>
+      <button onclick="doUnload()" class="btn btn-xs btn-danger" style="margin-left:10px">Unload</button>
+    </div>
+    <label style="display:block;font-size:.85rem;font-weight:600;color:#374151;margin-bottom:4px">
+      Printer
+      <select id="assign-printer" style="display:block;width:100%;margin-top:4px;padding:8px 12px;
+              border:1px solid #d1d5db;border-radius:6px;font-size:.9rem">
+        <option value="">Loading…</option>
+      </select>
+    </label>
+    <label style="display:block;font-size:.85rem;font-weight:600;color:#374151;margin-top:12px;margin-bottom:4px">
+      AMS Slot
+      <select id="assign-slot" style="display:block;width:100%;margin-top:4px;padding:8px 12px;
+              border:1px solid #d1d5db;border-radius:6px;font-size:.9rem">
+        <option value="0">Slot 0</option>
+        <option value="1">Slot 1</option>
+        <option value="2">Slot 2</option>
+        <option value="3">Slot 3</option>
+      </select>
+    </label>
+    <div style="display:flex;gap:10px;margin-top:20px">
+      <button id="assign-btn" class="btn btn-primary" onclick="doAssign()">Assign</button>
+      <button class="btn btn-secondary" onclick="closeAssign()">Cancel</button>
+    </div>
+  </div>
+</div>
 {% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function syncColor(val) {
+  const picker = document.getElementById('color-picker');
+  if (/^#[0-9A-Fa-f]{6}$/.test(val)) picker.value = val;
+}
+
+{% if spool_id %}
+let _assignSpoolId = null;
+const _csrfToken = '{{ csrf_token() }}';
+
+async function openAssign(btn) {
+  const spoolId = parseInt(btn.dataset.spoolId);
+  const spoolName = btn.dataset.spoolName;
+  const locationStr = btn.dataset.location;
+  _assignSpoolId = spoolId;
+  document.getElementById('assign-spool-name').textContent = spoolName;
+  document.getElementById('assign-msg').style.display = 'none';
+
+  const curDiv = document.getElementById('assign-current');
+  const stripped = locationStr.replace(/<[^>]*>/g, '').trim();
+  if (stripped && stripped !== 'storage') {
+    document.getElementById('assign-current-loc').textContent = stripped;
+    curDiv.style.display = 'block';
+  } else {
+    curDiv.style.display = 'none';
+  }
+
+  const sel = document.getElementById('assign-printer');
+  sel.innerHTML = '<option value="">Loading…</option>';
+  try {
+    const resp = await fetch('/api/printers');
+    const printers = await resp.json();
+    sel.innerHTML = printers.length
+      ? printers.map(p => `<option value="${p.id}">${p.name} (${p.model || ''})</option>`).join('')
+      : '<option value="">No printers configured</option>';
+  } catch(e) {
+    sel.innerHTML = '<option value="">Error loading printers</option>';
+  }
+
+  document.getElementById('assign-modal').style.display = 'flex';
+}
+
+function closeAssign() {
+  document.getElementById('assign-modal').style.display = 'none';
+  _assignSpoolId = null;
+}
+
+function showAssignMsg(text, ok) {
+  const el = document.getElementById('assign-msg');
+  el.textContent = text;
+  el.className = ok ? 'msg-ok' : 'msg-err';
+  el.style.display = 'block';
+}
+
+async function doAssign() {
+  if (!_assignSpoolId) return;
+  const printerId = document.getElementById('assign-printer').value;
+  const slot = document.getElementById('assign-slot').value;
+  if (!printerId) { showAssignMsg('Select a printer first.', false); return; }
+
+  const btn = document.getElementById('assign-btn');
+  btn.disabled = true;
+  btn.textContent = 'Assigning…';
+
+  const form = new FormData();
+  form.append('action', 'load');
+  form.append('printer_id', printerId);
+  form.append('ams_slot', slot);
+  form.append('csrf_token', _csrfToken);
+
+  try {
+    const resp = await fetch(`/inventory/${_assignSpoolId}/assign`, { method: 'POST', body: form });
+    const data = await resp.json();
+    showAssignMsg(data.message, data.ok);
+    if (data.ok) setTimeout(() => closeAssign(), 1200);
+  } catch(e) {
+    showAssignMsg('Network error: ' + e, false);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Assign';
+  }
+}
+
+async function doUnload() {
+  if (!_assignSpoolId) return;
+  const form = new FormData();
+  form.append('action', 'unload');
+  form.append('csrf_token', _csrfToken);
+
+  try {
+    const resp = await fetch(`/inventory/${_assignSpoolId}/assign`, { method: 'POST', body: form });
+    const data = await resp.json();
+    showAssignMsg(data.message, data.ok);
+    if (data.ok) {
+      document.getElementById('assign-current').style.display = 'none';
+      setTimeout(() => closeAssign(), 1200);
+    }
+  } catch(e) {
+    showAssignMsg('Network error: ' + e, false);
+  }
+}
+{% endif %}
+</script>
 {% endblock %}
