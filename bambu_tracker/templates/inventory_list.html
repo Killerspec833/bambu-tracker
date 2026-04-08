@@ -56,7 +56,10 @@
       </td>
       <td style="white-space:nowrap">
         <button class="btn btn-xs btn-primary"
-                onclick="openAssign({{ s.id }}, {{ s.name|tojson }}, {{ s.location_str|tojson }})">
+                data-spool-id="{{ s.id }}"
+                data-spool-name="{{ s.name }}"
+                data-location="{{ s.location_str }}"
+                onclick="openAssign(this)">
           Assign
         </button>
         <a href="/inventory/{{ s.id }}/edit" class="btn btn-xs btn-secondary">Edit</a>
@@ -123,7 +126,10 @@
 let _assignSpoolId = null;
 const _csrfToken = '{{ csrf_token() }}';
 
-async function openAssign(spoolId, spoolName, locationStr) {
+async function openAssign(btn) {
+  const spoolId = parseInt(btn.dataset.spoolId);
+  const spoolName = btn.dataset.spoolName;
+  const locationStr = btn.dataset.location;
   _assignSpoolId = spoolId;
   document.getElementById('assign-spool-name').textContent = spoolName;
   document.getElementById('assign-msg').style.display = 'none';
