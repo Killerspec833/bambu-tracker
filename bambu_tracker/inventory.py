@@ -183,6 +183,29 @@ class Inventory:
             ).mappings().fetchall()
         return [dict(r) for r in rows]
 
+    def get_printer_slot_assignments(self, printer_id: int) -> dict[int, dict[str, Any]]:
+        """Return {ams_slot: spool_dict} for all spools currently assigned to this printer."""
+        with get_engine().connect() as conn:
+            rows = conn.execute(
+                select(
+                    spools.c.id,
+                    spools.c.name,
+                    spools.c.material,
+                    spools.c.color_hex,
+                    spools.c.remaining_g,
+                    spools.c.total_weight_g,
+                    spool_locations.c.ams_slot,
+                )
+                .join(spool_locations, spool_locations.c.spool_id == spools.c.id)
+                .where(
+                    and_(
+                        spool_locations.c.printer_id == printer_id,
+                        spool_locations.c.unassigned_at.is_(None),
+                    )
+                )
+            ).mappings().fetchall()
+        return {int(r["ams_slot"]): dict(r) for r in rows}
+
     def get_printer(self, printer_id: int) -> dict[str, Any] | None:
         with get_engine().connect() as conn:
             row = conn.execute(

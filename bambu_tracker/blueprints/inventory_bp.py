@@ -51,17 +51,43 @@ def dashboard():
     # Build enriched printer objects for the template
     enriched_printers = []
     for p in printers_list:
-        ams = p.get("ams_data") or []
+        # MQTT-reported slots keyed by index
+        mqtt_slots: dict[int, dict] = {}
+        for s in (p.get("ams_data") or []):
+            if isinstance(s, dict):
+                mqtt_slots[int(s.get("index", 0))] = s
+
+        # Manually-assigned slots from spool_locations (source of truth)
+        db_slots = inv.get_printer_slot_assignments(p["id"])
+
+        all_indices = sorted(set(list(mqtt_slots.keys()) + list(db_slots.keys())))
         slots_parts = []
-        for slot in (ams if isinstance(ams, list) else []):
-            color = safe_color(slot.get("color", "#aaa"))
-            pct = max(0, min(100, int(slot.get("remaining_pct", 0))))
-            mat = slot.get("material", "") or "—"
+        for idx in all_indices:
+            db_s = db_slots.get(idx)
+            mqtt_s = mqtt_slots.get(idx)
+            if db_s:
+                color = safe_color(db_s.get("color_hex") or "#aaa")
+                mat = db_s.get("material") or "—"
+                rem = float(db_s.get("remaining_g") or 0)
+                total_w = float(db_s.get("total_weight_g") or 1000)
+                pct = int(rem / total_w * 100) if total_w else 0
+                pct = max(0, min(100, pct))
+                name_html = f'<span style="font-size:.75rem;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px">{h(db_s.get("name",""))}</span>'
+            elif mqtt_s:
+                color = safe_color(mqtt_s.get("color", "#aaa"))
+                mat = mqtt_s.get("material") or "—"
+                pct = max(0, min(100, int(mqtt_s.get("remaining_pct", 0))))
+                name_html = ""
+            else:
+                continue
             pct_cls = _pct_class(pct)
             slots_parts.append(f"""<div class="slot-row">
-              <span class="slot-idx">S{slot.get("index", "?")}</span>
+              <span class="slot-idx">S{idx}</span>
               <span class="dot" style="background:{color}"></span>
-              <span style="min-width:46px;font-size:.8rem">{h(mat)}</span>
+              <div style="display:flex;flex-direction:column;min-width:0;flex:1;gap:1px">
+                {name_html}
+                <span style="font-size:.8rem">{h(mat)}</span>
+              </div>
               <div class="pct-bar"><div class="pct-fill {pct_cls}" style="width:{pct}%;background:{color}"></div></div>
               <span style="min-width:34px;font-size:.78rem;text-align:right">{pct}%</span>
             </div>""")
