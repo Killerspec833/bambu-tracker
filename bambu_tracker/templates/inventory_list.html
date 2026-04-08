@@ -55,13 +55,12 @@
         </div>
       </td>
       <td style="white-space:nowrap">
+        <button class="btn btn-xs btn-primary"
+                onclick="openAssign({{ s.id }}, {{ s.name|tojson }}, {{ s.location_str|tojson }})">
+          Assign
+        </button>
         <a href="/inventory/{{ s.id }}/edit" class="btn btn-xs btn-secondary">Edit</a>
         <a href="/labels/{{ s.id }}" class="btn btn-xs btn-secondary">Label</a>
-        <form method="post" action="/inventory/{{ s.id }}/delete" style="display:inline"
-              onsubmit="return confirm('Delete spool {{ s.name }}?')">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button class="btn btn-xs btn-danger" type="submit">Del</button>
-        </form>
       </td>
     </tr>
   {% else %}
@@ -70,4 +69,153 @@
   </tbody>
 </table>
 {{ pagination|safe }}
+
+{# ── Assign modal ──────────────────────────────────────────────────────────── #}
+<div id="assign-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);
+     z-index:1000;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;padding:28px;width:100%;max-width:400px;
+              box-shadow:0 8px 32px #0003;margin:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <h3 style="margin:0">Assign Spool</h3>
+      <button onclick="closeAssign()" style="background:none;border:none;font-size:1.4rem;
+              cursor:pointer;color:#6b7280;line-height:1">&times;</button>
+    </div>
+    <p id="assign-spool-name" style="font-size:.85rem;color:#6b7280;margin-bottom:16px"></p>
+
+    <div id="assign-msg" style="display:none;margin-bottom:12px"></div>
+
+    <div id="assign-current" style="display:none;margin-bottom:14px;padding:10px 14px;
+         background:#fef9c3;border-radius:6px;font-size:.85rem;color:#854d0e">
+      Currently loaded: <strong id="assign-current-loc"></strong>
+      <button onclick="doUnload()" class="btn btn-xs btn-danger" style="margin-left:10px">Unload</button>
+    </div>
+
+    <label style="display:block;font-size:.85rem;font-weight:600;color:#374151;margin-bottom:4px">
+      Printer
+      <select id="assign-printer" style="display:block;width:100%;margin-top:4px;padding:8px 12px;
+              border:1px solid #d1d5db;border-radius:6px;font-size:.9rem">
+        <option value="">Loading…</option>
+      </select>
+    </label>
+    <label style="display:block;font-size:.85rem;font-weight:600;color:#374151;margin-top:12px;margin-bottom:4px">
+      AMS Slot
+      <select id="assign-slot" style="display:block;width:100%;margin-top:4px;padding:8px 12px;
+              border:1px solid #d1d5db;border-radius:6px;font-size:.9rem">
+        <option value="0">Slot 0</option>
+        <option value="1">Slot 1</option>
+        <option value="2">Slot 2</option>
+        <option value="3">Slot 3</option>
+      </select>
+    </label>
+
+    <div style="display:flex;gap:10px;margin-top:20px">
+      <button id="assign-btn" class="btn btn-primary" onclick="doAssign()">Assign</button>
+      <button class="btn btn-secondary" onclick="closeAssign()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_head %}
+<script>
+let _assignSpoolId = null;
+const _csrfToken = '{{ csrf_token() }}';
+
+async function openAssign(spoolId, spoolName, locationStr) {
+  _assignSpoolId = spoolId;
+  document.getElementById('assign-spool-name').textContent = spoolName;
+  document.getElementById('assign-msg').style.display = 'none';
+
+  // Show current location if loaded
+  const curDiv = document.getElementById('assign-current');
+  const stripped = locationStr.replace(/<[^>]*>/g, '').trim();
+  if (stripped && stripped !== 'storage') {
+    document.getElementById('assign-current-loc').textContent = stripped;
+    curDiv.style.display = 'block';
+  } else {
+    curDiv.style.display = 'none';
+  }
+
+  // Load printers
+  const sel = document.getElementById('assign-printer');
+  sel.innerHTML = '<option value="">Loading…</option>';
+  try {
+    const resp = await fetch('/api/printers');
+    const printers = await resp.json();
+    sel.innerHTML = printers.length
+      ? printers.map(p => `<option value="${p.id}">${p.name} (${p.model || ''})</option>`).join('')
+      : '<option value="">No printers configured</option>';
+  } catch(e) {
+    sel.innerHTML = '<option value="">Error loading printers</option>';
+  }
+
+  document.getElementById('assign-modal').style.display = 'flex';
+}
+
+function closeAssign() {
+  document.getElementById('assign-modal').style.display = 'none';
+  _assignSpoolId = null;
+}
+
+function showAssignMsg(text, ok) {
+  const el = document.getElementById('assign-msg');
+  el.textContent = text;
+  el.className = ok ? 'msg-ok' : 'msg-err';
+  el.style.display = 'block';
+}
+
+async function doAssign() {
+  if (!_assignSpoolId) return;
+  const printerId = document.getElementById('assign-printer').value;
+  const slot = document.getElementById('assign-slot').value;
+  if (!printerId) { showAssignMsg('Select a printer first.', false); return; }
+
+  const btn = document.getElementById('assign-btn');
+  btn.disabled = true;
+  btn.textContent = 'Assigning…';
+
+  const form = new FormData();
+  form.append('action', 'load');
+  form.append('printer_id', printerId);
+  form.append('ams_slot', slot);
+  form.append('csrf_token', _csrfToken);
+
+  try {
+    const resp = await fetch(`/inventory/${_assignSpoolId}/assign`, { method: 'POST', body: form });
+    const data = await resp.json();
+    showAssignMsg(data.message, data.ok);
+    if (data.ok) setTimeout(() => { closeAssign(); location.reload(); }, 1000);
+  } catch(e) {
+    showAssignMsg('Network error: ' + e, false);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Assign';
+  }
+}
+
+async function doUnload() {
+  if (!_assignSpoolId) return;
+  const form = new FormData();
+  form.append('action', 'unload');
+  form.append('csrf_token', _csrfToken);
+
+  try {
+    const resp = await fetch(`/inventory/${_assignSpoolId}/assign`, { method: 'POST', body: form });
+    const data = await resp.json();
+    showAssignMsg(data.message, data.ok);
+    if (data.ok) {
+      document.getElementById('assign-current').style.display = 'none';
+      setTimeout(() => { closeAssign(); location.reload(); }, 1000);
+    }
+  } catch(e) {
+    showAssignMsg('Network error: ' + e, false);
+  }
+}
+
+// Close on backdrop click
+document.getElementById('assign-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeAssign();
+});
+</script>
 {% endblock %}

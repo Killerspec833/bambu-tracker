@@ -276,6 +276,7 @@ def inventory_edit(spool_id: int):
             action=f"/inventory/{spool_id}/edit",
             values=s,
             materials=_MATERIALS,
+            spool_id=spool_id,
         )
     try:
         price_str = request.form.get("purchase_price", "").strip()
@@ -307,6 +308,39 @@ def inventory_delete(spool_id: int):
     g.inv.delete_spool(spool_id, user_id=current_user.id)
     g.inv.record_audit("spool.delete", user_id=current_user.id, entity_type="spool", entity_id=spool_id)
     return redirect(url_for("inventory.inventory_list", msg="Spool deleted.", kind="ok"))
+
+
+@inventory_bp.route("/inventory/<int:spool_id>/assign", methods=["POST"])
+@login_required
+@require_write
+def inventory_assign(spool_id: int):
+    from flask import jsonify
+    inv = g.inv
+    action = request.form.get("action", "load")
+
+    if action == "unload":
+        ok = inv.unload_spool(spool_id, user_id=current_user.id)
+        inv.record_audit("spool.unload", user_id=current_user.id, entity_type="spool", entity_id=spool_id)
+        if ok:
+            return jsonify({"ok": True, "message": "Spool unloaded."})
+        return jsonify({"ok": False, "message": "Spool is not currently loaded."})
+
+    try:
+        printer_id = int(request.form.get("printer_id", 0))
+        ams_slot = int(request.form.get("ams_slot", 0))
+    except (ValueError, TypeError):
+        return jsonify({"ok": False, "message": "Invalid printer or slot."}), 400
+
+    result = inv.load_spool(spool_id, printer_id, ams_slot, user_id=current_user.id)
+    inv.record_audit("spool.assign", user_id=current_user.id, entity_type="spool", entity_id=spool_id,
+                     new_value={"printer_id": printer_id, "ams_slot": ams_slot})
+
+    messages = {
+        "ok": "Spool assigned successfully.",
+        "already_loaded": "This spool is already loaded in another slot. Unload it first.",
+        "conflict": "That slot is already occupied by another spool.",
+    }
+    return jsonify({"ok": result == "ok", "message": messages.get(result, result)})
 
 
 @inventory_bp.route("/inventory/<int:spool_id>/adjust", methods=["POST"])

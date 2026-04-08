@@ -28,9 +28,17 @@
   <label>Purchase price ($) <input type="number" name="purchase_price" step="0.01" min="0"
          value="{{ '%.2f'|format(values.purchase_price_cents / 100) if values.purchase_price_cents else '' }}"></label>
   <label>Notes <textarea name="notes" rows="2">{{ values.notes or '' }}</textarea></label>
-  <div style="display:flex;gap:10px;margin-top:16px">
+  <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;align-items:center">
     <button class="btn btn-primary" type="submit">Save</button>
     <a href="/inventory" class="btn btn-secondary">Cancel</a>
+    {% if spool_id %}
+      <span style="flex:1"></span>
+      <form method="post" action="/inventory/{{ spool_id }}/delete" style="margin:0"
+            onsubmit="return confirm('Permanently delete this spool? This cannot be undone.')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-danger btn-sm" type="submit">Delete Spool</button>
+      </form>
+    {% endif %}
   </div>
 </form>
 {% endblock %}
