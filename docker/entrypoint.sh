@@ -71,23 +71,26 @@ PYEOF
     echo "[entrypoint] Real config.yaml detected — copying and enabling MQTT."
     cp /app/config.yaml.host /app/config.yaml
 
-    # If a token file was mounted, copy it and rewrite token_file path in config
-    # so the app finds it at the container-local path regardless of what the
-    # host path was.
+    # Always rewrite token_file to the container-local mount path.
+    # The token is mounted at /app/.bambu_token.host via TOKEN_FILE in .env.
     if [ -s /app/.bambu_token.host ]; then
       cp /app/.bambu_token.host /app/.bambu_token
       chmod 600 /app/.bambu_token
-      echo "[entrypoint] Token file mounted — rewriting token_file path in config."
-      python3 -c "
-import re, sys
+      echo "[entrypoint] Token file mounted and copied to /app/.bambu_token."
+    else
+      echo "[entrypoint] Warning: TOKEN_FILE not set or empty — MQTT will fail. Set TOKEN_FILE in .env."
+    fi
+    # Rewrite token_file in config regardless of whether the host file was
+    # present — this ensures any tilde-expanded host path is replaced with
+    # the container path so run.py always reads from /app/.bambu_token.
+    python3 -c "
+import re
 path = '/app/config.yaml'
 text = open(path).read()
 text = re.sub(r'token_file:.*', 'token_file: \"/app/.bambu_token\"', text)
 open(path, 'w').write(text)
+print('[entrypoint] token_file path rewritten to /app/.bambu_token')
 "
-    else
-      echo "[entrypoint] Warning: CONFIG_PATH is set but TOKEN_FILE is not — MQTT may fail if token_file path is not accessible inside the container."
-    fi
 
     MQTT_FLAG=""
   else
